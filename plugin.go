@@ -26,6 +26,9 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/format"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
+	"os/exec"
+	"strings"
+	"io"
 )
 
 // Plugin version. Substitute "<major>.<minor>.<build>" at build time, e.g. using -ldflags='-X main.pluginVersion=1.2.3'
@@ -58,6 +61,61 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 		_ = configServerInstanceName
 		_ = authClient
 
+		// Prototype implementation:
+		url := "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar"
+		var fileName string
+		{
+			tokens := strings.Split(url, "/")
+			fileName = tokens[len(tokens)-1]
+
+			_, err := os.Stat(fileName)
+			if err != nil {
+				fmt.Printf("Downloading %s\n", url)
+				file, err := os.Create(fileName)
+				if err != nil {
+					fmt.Printf("Error creating %s: %s\n", fileName, err)
+					return
+				}
+				defer file.Close()
+
+				response, err := http.Get(url)
+				if err != nil {
+					fmt.Printf("Error accessing %s: %s\n", url, err)
+					return
+				}
+				defer response.Body.Close()
+
+				_, err = io.Copy(file, response.Body)
+				if err != nil {
+					fmt.Printf("Error downloading %s: %s\n", url, err)
+					return
+				}
+			}
+
+		}
+
+		cmd := exec.Command("java", "-jar", fileName, "--dataflow.uri=http://localhost:9393/")
+		cmd.Env = []string{fmt.Sprintf("PATH=%s", os.Getenv("PATH"))}
+
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			fmt.Printf("Error accessing shell's standard input pipe: %s\n", err)
+		}
+		defer stdin.Close()
+
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		go func() {
+			io.Copy(stdin, os.Stdin)
+		}()
+
+		err = cmd.Run()
+		if err != nil {
+			fmt.Printf("Failed: %s\n", err)
+			return
+		}
+
 	default:
 		os.Exit(0) // Ignore CLI-MESSAGE-UNINSTALL etc.
 	}
@@ -70,7 +128,6 @@ func getDataflowServerInstanceName(ac *cli.ArgConsumer) string {
 func getServiceInstanceName(ac *cli.ArgConsumer) string {
 	return ac.Consume(1, "service instance name")
 }
-
 
 func diagnoseWithHelp(message string, command string) {
 	fmt.Printf("%s See 'cf help %s'.\n", message, command)
