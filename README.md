@@ -20,7 +20,7 @@ Note: if an invalid version number is provided, the build will succeed, but the 
 
 To print the version number of the built plugin, run it as a stand-alone executable, for example:
 ```bash
-$ $GOPATH/bin/spring-cloud-dataflow-for-cli-plugin
+$ $GOPATH/bin/spring-cloud-dataflow-for-pcf-cli-plugin
 This program is a plugin which expects to be installed into the cf CLI. It is not intended to be run stand-alone.
 Plugin version: 0.0.8
 ```
@@ -68,7 +68,7 @@ $ govendor test +local
 
 ## License
 
-The Spring Cloud Services CLI plugin is Open Source software released under the
+The Spring Cloud Dataflow for PCF CLI plugin is Open Source software released under the
 [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
 
 ## Contributing
