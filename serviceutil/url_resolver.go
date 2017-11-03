@@ -39,7 +39,7 @@ type serviceDefinitionResp struct {
 func ServiceInstanceURL(cliConnection plugin.CliConnection, serviceInstanceName string, accessToken string, authClient httpclient.AuthenticatedClient) (string, error) {
 
 	if true {
-		return "http://localhost:9393/", nil // get this from the service in the usual way and strip off the trailing "/dashboard"
+		return "https://dataflow-a1772139-e175-4716-82b6-e048502ffd0b.olive.springapps.io", nil
 	}
 
 	// FIXME: The following code was copied from another plugin and needs rework for this plugin
