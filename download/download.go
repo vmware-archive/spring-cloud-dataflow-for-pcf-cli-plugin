@@ -17,56 +17,155 @@
 package download
 
 import (
-	"strings"
-	"os"
+	"errors"
 	"fmt"
-	"net/http"
 	"io"
-	"path"
+	"net/http"
+
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 )
 
-func DownloadFile(url string) (string, error) {
-	tokens := strings.Split(url, "/")
-	fileName := tokens[len(tokens)-1]
+const (
+	ifNoneMatchHeader = "If-None-Match"
+	etagHeader        = "ETag"
+)
 
-	targetDir, err := targetDirectory()
+// Wrap Http response object actions inside an interface whose behaviour can be faked in tests
+//go:generate counterfeiter -o downloadfakes/fake_httpresponse.go . HttpResponse
+type HttpResponse interface {
+	GetHeader(name string) string
+	GetStatusCode() int
+	GetBody() io.ReadCloser
+}
+
+type httpResponse struct {
+	response *http.Response
+}
+
+func (h *httpResponse) GetHeader(name string) string {
+	return h.response.Header.Get(name)
+}
+
+func (h *httpResponse) GetStatusCode() int {
+	return h.response.StatusCode
+}
+
+func (h *httpResponse) GetBody() io.ReadCloser {
+	return h.response.Body
+}
+
+func NewHttpResponse(response *http.Response) *httpResponse {
+	return &httpResponse{
+		response: response,
+	}
+}
+
+// Wrap Http request interactions inside an interface whose behaviour can be faked in tests
+//go:generate counterfeiter -o downloadfakes/fake_httprequest.go . HttpRequest
+type HttpRequest interface {
+	SetHeader(key string, value string)
+	SendRequest() (HttpResponse, error)
+}
+
+type httpRequest struct {
+	client  *http.Client
+	request *http.Request
+}
+
+func (h *httpRequest) SetHeader(key string, value string) {
+	h.request.Header.Add(key, value)
+}
+
+func (h *httpRequest) SendRequest() (HttpResponse, error) {
+	resp, err := h.client.Do(h.request)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewHttpResponse(resp), nil
+}
+
+// TODO: Move this type out of this package
+//go:generate counterfeiter -o downloadfakes/fake_httphelper.go . HttpHelper
+type HttpHelper interface {
+	CreateHttpRequest(method string, url string) (HttpRequest, error)
+}
+
+type httpHelper struct {
+}
+
+func (h *httpHelper) CreateHttpRequest(method string, url string) (HttpRequest, error) {
+	cl := &http.Client{
+		CheckRedirect: nil,
+	}
+
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &httpRequest{
+		client:  cl,
+		request: req,
+	}, nil
+}
+
+func NewHttpHelper() *httpHelper {
+	return &httpHelper{}
+}
+
+type Downloader interface {
+	DownloadFile(url string, checksum string) (string, error)
+}
+
+type downloader struct {
+	cache      cache.Cache
+	httpHelper HttpHelper
+}
+
+func NewDownloader(cache cache.Cache, httpHelper HttpHelper) (*downloader, error) {
+	return &downloader{
+		cache:      cache,
+		httpHelper: httpHelper,
+	}, nil
+}
+
+func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
+	cacheEntry := d.cache.Entry(url)
+
+	downloadedFilePath, cachedEtag, err := cacheEntry.Retrieve()
 	if err != nil {
 		return "", err
 	}
-	filePath := path.Join(targetDir, fileName)
 
-	_, err = os.Stat(filePath) // FIXME: proper caching using e.g. etags or SHAs to be implemented
+	getRequest, err := d.httpHelper.CreateHttpRequest(http.MethodGet, url)
 	if err != nil {
+		return downloadedFilePath, err
+	}
+
+	if cachedEtag != "" {
+		getRequest.SetHeader(ifNoneMatchHeader, cachedEtag)
+
+		if downloadedFilePath == "" {
+			fmt.Printf("File at '%s' has previously been cached but cannot be found on local disk. Downloading again.\n", url)
+		}
+	}
+
+	response, err := getRequest.SendRequest()
+	if err != nil {
+		return downloadedFilePath, err
+	}
+
+	if response.GetStatusCode() == http.StatusNotModified {
+		return downloadedFilePath, nil
+	}
+
+	if response.GetStatusCode() == http.StatusOK {
 		fmt.Printf("Downloading %s\n", url)
-		file, err := os.Create(filePath)
-		if err != nil {
-			fmt.Printf("Error creating %s: %s\n", filePath, err)
-			return "", err
-		}
-		defer file.Close()
-
-		response, err := http.Get(url)
-		if err != nil {
-			fmt.Printf("Error accessing %s: %s\n", url, err)
-			return "", err
-		}
-		defer response.Body.Close()
-
-		_, err = io.Copy(file, response.Body)
-		if err != nil {
-			fmt.Printf("Error downloading %s: %s\n", url, err)
-			return "", err
-		}
+		newEtagValue := response.GetHeader(etagHeader)
+		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum)
+		return downloadedFilePath, err
 	}
 
-	return filePath, nil
-}
-
-func targetDirectory() (string, error) {
-	dir := os.Getenv("CF_HOME")
-	if dir == "" {
-		dir = os.Getenv("HOME")
-	}
-	dirPath := path.Join(dir, ".cf", "spring-cloud-dataflow-for-pcf/cache")
-	return dirPath, os.MkdirAll(dirPath, 0755)
+	return downloadedFilePath, errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
 }
