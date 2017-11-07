@@ -18,13 +18,13 @@ package shell
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"io"
 )
 
 func RunShell(cmd *exec.Cmd) {
-	cmd.Env = []string{fmt.Sprintf("PATH=%s", os.Getenv("PATH"))}
+	cmd.Env = envVars("PATH", "HOME", "CF_HOME")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -46,4 +46,12 @@ func RunShell(cmd *exec.Cmd) {
 	}
 }
 
-
+func envVars(keys ...string) []string {
+	vars := []string{}
+	for _, key := range keys {
+		if val, set := os.LookupEnv(key); set {
+			vars = append(vars, fmt.Sprintf("%s=%s", key, val))
+		}
+	}
+	return vars
+}
