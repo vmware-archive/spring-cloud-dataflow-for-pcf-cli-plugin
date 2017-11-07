@@ -19,7 +19,6 @@ package dataflow
 import "os/exec"
 
 func DataflowShellCommand(fileName string, dataflowServerUrl string) *exec.Cmd {
-	return exec.Command("java", "-jar", fileName, "--dataflow.uri="+dataflowServerUrl,
-		"--dataflow.skip-ssl-validation=true", `--dataflow.credentials-provider-command="cf oauth-token"`) // FIXME: don't always skip SSL validation
+	return exec.Command("java", "-jar", fileName, "--dataflow.uri="+dataflowServerUrl)
 }
 
