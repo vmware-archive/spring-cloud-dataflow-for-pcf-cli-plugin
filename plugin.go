@@ -62,6 +62,7 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 
 	case "dataflow-shell":
 		dataflowSIName := getDataflowServerInstanceName(argsConsumer)
+		argsConsumer.CheckAllConsumed()
 		accessToken, err := cfutil.GetToken(cliConnection)
 		if err != nil {
 			fmt.Printf("Failed: %s\n", err)
