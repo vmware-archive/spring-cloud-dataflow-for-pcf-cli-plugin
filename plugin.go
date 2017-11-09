@@ -21,17 +21,18 @@ import (
 	"net/http"
 	"os"
 
+	"os/exec"
+
 	"code.cloudfoundry.org/cli/plugin"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cfutil"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cli"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/format"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
-	"os/exec"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/shell"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/serviceutil"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cfutil"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/shell"
 )
 
 // Plugin version. Substitute "<major>.<minor>.<build>" at build time, e.g. using -ldflags='-X main.pluginVersion=1.2.3'
@@ -76,7 +77,7 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 		downloadAndRunShell(func() (string, error) {
 			return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient)
 		}, func(fileName string) *exec.Cmd {
-			return dataflow.DataflowShellCommand(fileName, dataflowServer)
+			return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
 		})
 
 	default:

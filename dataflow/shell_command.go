@@ -18,7 +18,11 @@ package dataflow
 
 import "os/exec"
 
-func DataflowShellCommand(fileName string, dataflowServerUrl string) *exec.Cmd {
-	return exec.Command("java", "-jar", fileName, "--dataflow.uri="+dataflowServerUrl,
-		"--dataflow.skip-ssl-validation=true", `--dataflow.credentials-provider-command=cf oauth-token`) // FIXME: don't always skip SSL validation
+func DataflowShellCommand(fileName string, dataflowServerUrl string, skipSslValidation bool) *exec.Cmd {
+	cmd := exec.Command("java", "-jar", fileName, "--dataflow.uri="+dataflowServerUrl,
+		"--dataflow.credentials-provider-command=cf oauth-token")
+	if skipSslValidation {
+		cmd.Args = append(cmd.Args, "--dataflow.skip-ssl-validation=true")
+	}
+	return cmd
 }
