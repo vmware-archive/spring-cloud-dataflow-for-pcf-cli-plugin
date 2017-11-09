@@ -23,6 +23,8 @@ import (
 
 	"os/exec"
 
+	"io"
+
 	"code.cloudfoundry.org/cli/plugin"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cfutil"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cli"
@@ -62,23 +64,24 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 
 	case "dataflow-shell":
 		dataflowSIName := getDataflowServerInstanceName(argsConsumer)
-		argsConsumer.CheckAllConsumed()
-		accessToken, err := cfutil.GetToken(cliConnection)
-		if err != nil {
-			fmt.Printf("Failed: %s\n", err)
-			return
-		}
 
-		dataflowServer, err := serviceutil.ServiceInstanceURL(cliConnection, dataflowSIName, accessToken, authClient)
-		if err != nil {
-			fmt.Printf("Failed: %s\n", err)
-			return
-		}
+		runAction(argsConsumer, cliConnection, fmt.Sprintf("Attaching shell to dataflow service %s", format.Bold(format.Cyan(dataflowSIName))), func(progressWriter io.Writer) (string, error) {
+			argsConsumer.CheckAllConsumed()
+			accessToken, err := cfutil.GetToken(cliConnection)
+			if err != nil {
+				return "", err
+			}
 
-		downloadAndRunShell(func() (string, error) {
-			return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient)
-		}, func(fileName string) *exec.Cmd {
-			return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
+			dataflowServer, err := serviceutil.ServiceInstanceURL(cliConnection, dataflowSIName, accessToken, authClient)
+			if err != nil {
+				return "", err
+			}
+
+			return "", downloadAndRunShell(func() (string, error) {
+				return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient)
+			}, func(fileName string) *exec.Cmd {
+				return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
+			}, progressWriter)
 		})
 
 	default:
@@ -90,18 +93,19 @@ type urlResolver func() (string, error)
 
 type shellCommandFactory func(fileName string) *exec.Cmd
 
-func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommandFactory) {
+func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommandFactory, progressWriter io.Writer) error {
 	url, err := shellDownloadUrl()
 	if err != nil {
-		return
+		return err
 	}
 
 	filePath, err := download.DownloadFile(url)
 	if err != nil {
-		return
+		return err
 	}
 
-	shell.RunShell(shellCommand(filePath))
+	fmt.Fprintln(progressWriter, "Launching dataflow shell JAR")
+	return shell.RunShell(shellCommand(filePath))
 }
 
 func getDataflowServerInstanceName(ac *cli.ArgConsumer) string {
@@ -152,4 +156,12 @@ func main() {
 		os.Exit(0)
 	}
 	plugin.Start(new(Plugin))
+}
+
+func runAction(argsConsumer *cli.ArgConsumer, cliConnection plugin.CliConnection, message string, action func(progressWriter io.Writer) (string, error)) {
+	argsConsumer.CheckAllConsumed()
+
+	format.RunAction(cliConnection, message, action, os.Stdout, func() {
+		os.Exit(1)
+	})
 }

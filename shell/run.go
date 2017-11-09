@@ -23,12 +23,13 @@ import (
 	"os/exec"
 )
 
-func RunShell(cmd *exec.Cmd) {
+func RunShell(cmd *exec.Cmd) error {
 	cmd.Env = envVars("PATH", "HOME", "CF_HOME")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		fmt.Printf("Error accessing shell's standard input pipe: %s\n", err)
+		return err
 	}
 	defer stdin.Close()
 
@@ -39,11 +40,7 @@ func RunShell(cmd *exec.Cmd) {
 		io.Copy(stdin, os.Stdin)
 	}()
 
-	err = cmd.Run()
-	if err != nil {
-		fmt.Printf("Failed: %s\n", err)
-		return
-	}
+	return cmd.Run()
 }
 
 func envVars(keys ...string) []string {
