@@ -39,7 +39,8 @@ type serviceDefinitionResp struct {
 func ServiceInstanceURL(cliConnection plugin.CliConnection, serviceInstanceName string, accessToken string, authClient httpclient.AuthenticatedClient) (string, error) {
 
 	if true {
-		return "https://dataflow-a1772139-e175-4716-82b6-e048502ffd0b.olive.springapps.io", nil
+		return "https://dataflow-794302c0-f310-474f-8070-cd63ac5d729e.olive.springapps.io/", nil
+		//return "https://p-dataflow.olive.springapps.io/instances/794302c0-f310-474f-8070-cd63ac5d729e/", nil
 	}
 
 	// FIXME: The following code was copied from another plugin and needs rework for this plugin
