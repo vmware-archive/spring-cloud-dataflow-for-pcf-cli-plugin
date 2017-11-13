@@ -6,10 +6,11 @@ import (
 	"io"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"crypto/sha256"
+
+	"io/ioutil"
 
 	"code.cloudfoundry.org/cli/cf/errors"
 )
@@ -19,8 +20,11 @@ const (
 	cfHomeProperty       = "CF_HOME"
 	homeProperty         = "HOME"
 	cfDataDirectory      = ".cf"
-	scdfCacheDirectory   = "spring-cloud-dataflow-for-pcf/cache"
+	cacheEntriesFilePerm = 0644
+	cacheDirectoryPerm   = 0755
 )
+
+var scdfCacheDirectory = path.Join("spring-cloud-dataflow-for-pcf", "cache")
 
 // Cache provides a cache of files indexed by their download URLs. Each cached file has an associated etag.
 //go:generate counterfeiter -o ../downloadfakes/fake_cache.go . Cache
@@ -50,6 +54,11 @@ func NewCache() (*fileCache, error) {
 	cacheDataFile := path.Join(downloadsDir, cacheEntriesFileName)
 	if !fileExists(cacheDataFile) {
 		_, err := os.Create(cacheDataFile)
+		if err != nil {
+			return nil, err
+		}
+
+		err = os.Chmod(cacheDataFile, cacheEntriesFilePerm)
 		if err != nil {
 			return nil, err
 		}
@@ -155,12 +164,8 @@ func fileExists(filePath string) bool {
 	return !os.IsNotExist(err)
 }
 
-func createDownloadsDirectory(dirPath string, permissions string) error {
-	filemode, err := strconv.ParseUint(permissions, 0, 32)
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(dirPath, os.FileMode(filemode))
+func createDownloadsDirectory(dirPath string) error {
+	return os.MkdirAll(dirPath, cacheDirectoryPerm)
 }
 
 func createFilePathForDownloadFile(url string, destinationDirectory string) string {
@@ -176,7 +181,7 @@ func getDownloadsDirectory() (string, error) {
 		dir = os.Getenv(homeProperty)
 	}
 	dirPath := path.Join(dir, cfDataDirectory, scdfCacheDirectory)
-	return dirPath, createDownloadsDirectory(dirPath, "0755")
+	return dirPath, createDownloadsDirectory(dirPath)
 }
 
 func getETagForUrl(url string, metadataFile string) (string, error) {
@@ -198,13 +203,27 @@ func getETagForUrl(url string, metadataFile string) (string, error) {
 	return "", nil
 }
 
-// TODO: Need to be able to update an existing url vs. etag line
 func setEtagForUrl(url string, etag string, cacheEntriesFile string) error {
-	cacheDataFile, err := os.Open(cacheEntriesFile)
+	cacheBytes, err := ioutil.ReadFile(cacheEntriesFile)
 	if err != nil {
 		return err
 	}
 
-	_, err = cacheDataFile.WriteString(url + " : " + etag + "\n")
-	return err
+	cacheLines := strings.Split(string(cacheBytes), "\n")
+
+	existingEntryFound := false
+	for i, line := range cacheLines {
+		if strings.HasPrefix(line, url+" : ") {
+			cacheLines[i] = url + " : " + etag
+			existingEntryFound = true
+			break
+		}
+	}
+
+	if !existingEntryFound {
+		cacheLines = append(cacheLines, url+" : "+etag)
+	}
+
+	output := strings.Join(cacheLines, "\n")
+	return ioutil.WriteFile(cacheEntriesFile, []byte(output), cacheEntriesFilePerm)
 }

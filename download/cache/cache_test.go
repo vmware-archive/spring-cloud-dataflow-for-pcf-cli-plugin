@@ -8,6 +8,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"io/ioutil"
+
+	"fmt"
+
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 )
 
@@ -18,20 +22,23 @@ const (
 )
 
 var (
-	testCacheFolder = os.Getenv("TMPDIR") + "plugin-testing-cf-home"
+	testCacheFolder string
 	cfHomeWasSet    bool
 	oldCfHomeValue  string
 )
 
 var _ = BeforeSuite(func() {
+	testCacheFolder, err := ioutil.TempDir("", "plugin-testing-cf-home")
+	if err != nil {
+		Fail(fmt.Sprintf("Unable to create temporary test folder: %s", err.Error()))
+	}
+
 	oldCfHomeValue, cfHomeWasSet = os.LookupEnv(cfHomeProperty)
 	os.Setenv(cfHomeProperty, testCacheFolder)
 })
 
 var _ = AfterSuite(func() {
-	if _, err := os.Stat(testCacheFolder); !os.IsNotExist(err) {
-		os.RemoveAll(testCacheFolder)
-	}
+	os.RemoveAll(testCacheFolder)
 
 	if cfHomeWasSet {
 		os.Setenv(cfHomeProperty, oldCfHomeValue)
