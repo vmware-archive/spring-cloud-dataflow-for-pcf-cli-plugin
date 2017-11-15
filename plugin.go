@@ -30,6 +30,7 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cli"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/format"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
@@ -99,7 +100,15 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 		return err
 	}
 
-	filePath, err := download.DownloadFile(url)
+	// TODO: the packages of the download cache and the http helper are subject to change
+	downloadCache, _ := cache.NewCache()
+	httpHelper := download.NewHttpHelper()
+	downloader, err := download.NewDownloader(downloadCache, httpHelper)
+	if err != nil {
+		return err
+	}
+
+	filePath, err := downloader.DownloadFile(url, "TODO: checksum needs to be supplied")
 	if err != nil {
 		return err
 	}
