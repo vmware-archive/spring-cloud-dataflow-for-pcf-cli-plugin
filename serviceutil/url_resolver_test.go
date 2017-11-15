@@ -19,9 +19,9 @@ package serviceutil_test
 import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/serviceutil"
 
-	"bytes"
 	"errors"
-	"io/ioutil"
+
+	"net/http"
 
 	"code.cloudfoundry.org/cli/plugin/models"
 	"code.cloudfoundry.org/cli/plugin/pluginfakes"
@@ -30,7 +30,7 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient/httpclientfakes"
 )
 
-var _ = PDescribe("ServiceInstanceURL", func() { // FIXME: unpend this when implementation is ready
+var _ = Describe("ServiceInstanceURL", func() {
 
 	const errMessage = "some error"
 
@@ -101,91 +101,69 @@ var _ = PDescribe("ServiceInstanceURL", func() { // FIXME: unpend this when impl
 	Context("when the dashboard URL is in the correct format", func() {
 		BeforeEach(func() {
 			fakeCliConnection.GetServiceReturns(plugin_models.GetService_Model{
-				DashboardUrl: "https://spring-cloud-broker.some.host.name/x/y/guid",
+				DashboardUrl: "https://spring-cloud-broker.some.host.name/instances/guid/dashboard",
 			}, nil)
 		})
 
-		Context("when dashboard cannot be contacted", func() {
+		It("should issue a get to the dataflow broker", func() {
+			Expect(authClient.DoAuthenticatedGetCallCount()).To(Equal(1))
+			url, token := authClient.DoAuthenticatedGetArgsForCall(0)
+			Expect(url).To(Equal("https://spring-cloud-broker.some.host.name/instances/guid"))
+			Expect(token).To(Equal(accessToken))
+		})
+
+		Context("when the dataflow broker cannot be contacted", func() {
 			BeforeEach(func() {
-				authClient.DoAuthenticatedGetReturns(nil, 502, testError)
+				authClient.DoAuthenticatedGetReturns(nil, http.StatusBadGateway, http.Header{}, testError)
 			})
 
 			It("should return a suitable error", func() {
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("Invalid service definition response: " + errMessage))
+				Expect(err).To(MatchError("dataflow service broker failed: " + errMessage))
 			})
 		})
 
-		Context("when dashboard can be contacted", func() {
-			Context("but the response body contains invalid JSON", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString("")), 200, nil)
-				})
-
-				It("should return a suitable error", func() {
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError("JSON response failed to unmarshal: "))
-				})
+		Context("when the dataflow broker returns status ok", func() {
+			BeforeEach(func() {
+				authClient.DoAuthenticatedGetReturns(nil, http.StatusOK, http.Header{}, nil)
 			})
 
-			Context("but the response body has the wrong content", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString(`{"credentials":0}`)), 200, nil)
-				})
+			It("should return a suitable error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("dataflow service broker did not return expected response (302): 200"))
+			})
+		})
 
-				It("should return a suitable error", func() {
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(`JSON response failed to unmarshal: {"credentials":0}`))
-				})
+		Context("when the dataflow broker returns a redirect without a location header", func() {
+			BeforeEach(func() {
+				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{}, nil)
 			})
 
-			Context("but the '/cli/instance endpoint cannot be found", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString(`{"credentials":0}`)), 404, nil)
-				})
-				It("should warn that the SCS version might be too old", func() {
-					versionWarning := "The /cli/instance endpoint could not be found.\n" +
-						"This could be because the Spring Cloud Services broker version is too old.\n" +
-						"Please ensure SCS is at least version 1.3.3.\n"
+			It("should return a suitable error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("dataflow service broker did not return a location header"))
+			})
+		})
 
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(versionWarning))
-				})
+		Context("when the dataflow broker returns a redirect with a location header with the wrong number of items", func() {
+			BeforeEach(func() {
+				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{"Location": []string{}}, nil)
 			})
 
-			Context("and the response body cannot be read", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(&badReader{readErr: testError}, 200, nil)
-				})
+			It("should return a suitable error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("dataflow service broker returned a location header of the wrong length (0)"))
+			})
+		})
 
-				It("should return a suitable error", func() {
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError("Cannot read service definition response body: " + errMessage))
-				})
+		Context("when the dataflow broker returns a redirect with a location header with one item", func() {
+			BeforeEach(func() {
+				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{"Location": []string{"https://dataflow-server-url"}}, nil)
 			})
 
-			Context("and the response body has an empty URI", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString(`{"credentials":{"uri":""}}`)), 200, nil)
-				})
-
-				It("should return a suitable error", func() {
-					serviceDefinitionError := `JSON response contained empty property 'credentials.url', response body: '{"credentials":{"uri":""}}'`
-
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(serviceDefinitionError))
-				})
-			})
-
-			Context("and the response body has the correct content", func() {
-				BeforeEach(func() {
-					authClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString(`{"credentials":{"uri":"https://service.instance.url"}}`)), 200, nil)
-				})
-
-				It("should return a suitable error", func() {
-					Expect(err).NotTo(HaveOccurred())
-					Expect(serviceInstanceURL).To(Equal("https://service.instance.url/"))
-				})
+			It("should return a suitable error", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(serviceInstanceURL).To(Equal("https://dataflow-server-url"))
 			})
 		})
 	})

@@ -56,7 +56,12 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSslValidation},
 	}
-	client := &http.Client{Transport: tr}
+	client := &http.Client{
+		Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse // avoid following redirects
+		},
+	}
 	authClient := httpclient.NewAuthenticatedClient(client)
 
 	argsConsumer := cli.NewArgConsumer(args, diagnoseWithHelp)
@@ -78,7 +83,7 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 				return "", err
 			}
 
-			return "", downloadAndRunShell(func() (string, error) {
+			return "", downloadAndRunShell(func() (string, string, error) {
 				return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient)
 			}, func(fileName string) *exec.Cmd {
 				return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
@@ -90,12 +95,12 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 	}
 }
 
-type urlResolver func() (string, error)
+type urlResolver func() (string, string, error)
 
 type shellCommandFactory func(fileName string) *exec.Cmd
 
 func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommandFactory, progressWriter io.Writer) error {
-	url, err := shellDownloadUrl()
+	url, checksum, err := shellDownloadUrl()
 	if err != nil {
 		return err
 	}
@@ -108,7 +113,7 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 		return err
 	}
 
-	filePath, err := downloader.DownloadFile(url, "TODO: checksum needs to be supplied")
+	filePath, err := downloader.DownloadFile(url, checksum)
 	if err != nil {
 		return err
 	}

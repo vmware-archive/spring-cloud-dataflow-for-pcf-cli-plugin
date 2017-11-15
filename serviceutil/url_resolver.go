@@ -17,13 +17,12 @@
 package serviceutil
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"errors"
 
 	"code.cloudfoundry.org/cli/plugin"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
@@ -37,14 +36,6 @@ type serviceDefinitionResp struct {
 
 // ServiceInstanceURL obtains the service instance URL of a service with a specific name. This is a secure operation and an access token is provided for authentication and authorisation.
 func ServiceInstanceURL(cliConnection plugin.CliConnection, serviceInstanceName string, accessToken string, authClient httpclient.AuthenticatedClient) (string, error) {
-
-	if true {
-		return "https://dataflow-794302c0-f310-474f-8070-cd63ac5d729e.olive.springapps.io/", nil
-		//return "https://p-dataflow.olive.springapps.io/instances/794302c0-f310-474f-8070-cd63ac5d729e/", nil
-	}
-
-	// FIXME: The following code was copied from another plugin and needs rework for this plugin
-
 	serviceModel, err := cliConnection.GetService(serviceInstanceName)
 	if err != nil {
 		return "", fmt.Errorf("Service instance not found: %s", err)
@@ -60,35 +51,25 @@ func ServiceInstanceURL(cliConnection plugin.CliConnection, serviceInstanceName 
 	if len(segments) == 0 || (len(segments) == 1 && segments[0] == "") {
 		return "", fmt.Errorf("path of %s has no segments", serviceModel.DashboardUrl)
 	}
-	guid := segments[len(segments)-1]
 
-	parsedUrl.Path = "/cli/instance/" + guid
+	parsedUrl.Path = strings.Join(segments[:len(segments)-1], "/")
 
-	bodyReader, statusCode, err := authClient.DoAuthenticatedGet(parsedUrl.String(), accessToken)
-
-	//In the case of a 404, the most likely cause is that the CLI version is greater than the broker version.
-	if statusCode == http.StatusNotFound {
-		return "", errors.New("The /cli/instance endpoint could not be found.\n" +
-			"This could be because the Spring Cloud Services broker version is too old.\n" +
-			"Please ensure SCS is at least version 1.3.3.\n")
-	}
-	var serviceDefinitionResp serviceDefinitionResp
-	if err != nil {
-		return "", fmt.Errorf("Invalid service definition response: %s", err)
+	_, statusCode, header, err := authClient.DoAuthenticatedGet(parsedUrl.String(), accessToken)
+	if statusCode != http.StatusFound {
+		if err != nil {
+			return "", fmt.Errorf("dataflow service broker failed: %s", err)
+		}
+		return "", fmt.Errorf("dataflow service broker did not return expected response (302): %d", statusCode)
 	}
 
-	body, err := ioutil.ReadAll(bodyReader)
-	if err != nil {
-		return "", fmt.Errorf("Cannot read service definition response body: %s", err)
+	locationHeader, locationPresent := header["Location"]
+	if !locationPresent {
+		return "", errors.New("dataflow service broker did not return a location header")
 	}
 
-	err = json.Unmarshal(body, &serviceDefinitionResp)
-	if err != nil {
-		return "", fmt.Errorf("JSON response failed to unmarshal: %s", string(body))
+	if len(locationHeader) != 1 {
+		return "", fmt.Errorf("dataflow service broker returned a location header of the wrong length (%d)", len(locationHeader))
 	}
-	if serviceDefinitionResp.Credentials.URI == "" {
-		return "", fmt.Errorf("JSON response contained empty property 'credentials.url', response body: '%s'", string(body))
 
-	}
-	return serviceDefinitionResp.Credentials.URI + "/", nil
+	return locationHeader[0], nil
 }

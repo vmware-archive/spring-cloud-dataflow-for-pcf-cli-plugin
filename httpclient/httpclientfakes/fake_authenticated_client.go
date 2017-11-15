@@ -3,13 +3,14 @@ package httpclientfakes
 
 import (
 	"io"
+	"net/http"
 	"sync"
 
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 )
 
 type FakeAuthenticatedClient struct {
-	DoAuthenticatedGetStub        func(url string, accessToken string) (io.ReadCloser, int, error)
+	DoAuthenticatedGetStub        func(url string, accessToken string) (io.ReadCloser, int, http.Header, error)
 	doAuthenticatedGetMutex       sync.RWMutex
 	doAuthenticatedGetArgsForCall []struct {
 		url         string
@@ -18,12 +19,14 @@ type FakeAuthenticatedClient struct {
 	doAuthenticatedGetReturns struct {
 		result1 io.ReadCloser
 		result2 int
-		result3 error
+		result3 http.Header
+		result4 error
 	}
 	doAuthenticatedGetReturnsOnCall map[int]struct {
 		result1 io.ReadCloser
 		result2 int
-		result3 error
+		result3 http.Header
+		result4 error
 	}
 	DoAuthenticatedDeleteStub        func(url string, accessToken string) (int, error)
 	doAuthenticatedDeleteMutex       sync.RWMutex
@@ -75,7 +78,7 @@ type FakeAuthenticatedClient struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeAuthenticatedClient) DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, error) {
+func (fake *FakeAuthenticatedClient) DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, http.Header, error) {
 	fake.doAuthenticatedGetMutex.Lock()
 	ret, specificReturn := fake.doAuthenticatedGetReturnsOnCall[len(fake.doAuthenticatedGetArgsForCall)]
 	fake.doAuthenticatedGetArgsForCall = append(fake.doAuthenticatedGetArgsForCall, struct {
@@ -88,9 +91,9 @@ func (fake *FakeAuthenticatedClient) DoAuthenticatedGet(url string, accessToken 
 		return fake.DoAuthenticatedGetStub(url, accessToken)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
+		return ret.result1, ret.result2, ret.result3, ret.result4
 	}
-	return fake.doAuthenticatedGetReturns.result1, fake.doAuthenticatedGetReturns.result2, fake.doAuthenticatedGetReturns.result3
+	return fake.doAuthenticatedGetReturns.result1, fake.doAuthenticatedGetReturns.result2, fake.doAuthenticatedGetReturns.result3, fake.doAuthenticatedGetReturns.result4
 }
 
 func (fake *FakeAuthenticatedClient) DoAuthenticatedGetCallCount() int {
@@ -105,29 +108,32 @@ func (fake *FakeAuthenticatedClient) DoAuthenticatedGetArgsForCall(i int) (strin
 	return fake.doAuthenticatedGetArgsForCall[i].url, fake.doAuthenticatedGetArgsForCall[i].accessToken
 }
 
-func (fake *FakeAuthenticatedClient) DoAuthenticatedGetReturns(result1 io.ReadCloser, result2 int, result3 error) {
+func (fake *FakeAuthenticatedClient) DoAuthenticatedGetReturns(result1 io.ReadCloser, result2 int, result3 http.Header, result4 error) {
 	fake.DoAuthenticatedGetStub = nil
 	fake.doAuthenticatedGetReturns = struct {
 		result1 io.ReadCloser
 		result2 int
-		result3 error
-	}{result1, result2, result3}
+		result3 http.Header
+		result4 error
+	}{result1, result2, result3, result4}
 }
 
-func (fake *FakeAuthenticatedClient) DoAuthenticatedGetReturnsOnCall(i int, result1 io.ReadCloser, result2 int, result3 error) {
+func (fake *FakeAuthenticatedClient) DoAuthenticatedGetReturnsOnCall(i int, result1 io.ReadCloser, result2 int, result3 http.Header, result4 error) {
 	fake.DoAuthenticatedGetStub = nil
 	if fake.doAuthenticatedGetReturnsOnCall == nil {
 		fake.doAuthenticatedGetReturnsOnCall = make(map[int]struct {
 			result1 io.ReadCloser
 			result2 int
-			result3 error
+			result3 http.Header
+			result4 error
 		})
 	}
 	fake.doAuthenticatedGetReturnsOnCall[i] = struct {
 		result1 io.ReadCloser
 		result2 int
-		result3 error
-	}{result1, result2, result3}
+		result3 http.Header
+		result4 error
+	}{result1, result2, result3, result4}
 }
 
 func (fake *FakeAuthenticatedClient) DoAuthenticatedDelete(url string, accessToken string) (int, error) {

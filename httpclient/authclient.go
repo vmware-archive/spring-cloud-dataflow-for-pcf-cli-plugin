@@ -25,7 +25,7 @@ import (
 
 //go:generate counterfeiter -o httpclientfakes/fake_authenticated_client.go . AuthenticatedClient
 type AuthenticatedClient interface {
-	DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, error)
+	DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, http.Header, error)
 
 	DoAuthenticatedDelete(url string, accessToken string) (int, error)
 
@@ -42,24 +42,24 @@ func NewAuthenticatedClient(httpClient Client) *authenticatedClient {
 	return &authenticatedClient{Httpclient: httpClient}
 }
 
-func (c *authenticatedClient) DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, error) {
+func (c *authenticatedClient) DoAuthenticatedGet(url string, accessToken string) (io.ReadCloser, int, http.Header, error) {
 	statusCode := 0
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, statusCode, fmt.Errorf("Request creation error: %s", err)
+		return nil, statusCode, map[string][]string{}, fmt.Errorf("Request creation error: %s", err)
 	}
 
 	req.Header.Add("Accept", "application/json")
 	addAuthorizationHeader(req, accessToken)
 	resp, err := c.Httpclient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Authenticated get of '%s' failed: %s", url, err)
+		return nil, 0, map[string][]string{}, fmt.Errorf("Authenticated get of '%s' failed: %s", url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("Authenticated get of '%s' failed: %s", url, resp.Status)
+		return nil, resp.StatusCode, resp.Header, fmt.Errorf("Authenticated get of '%s' failed: %s", url, resp.Status)
 	}
 
-	return resp.Body, resp.StatusCode, nil
+	return resp.Body, resp.StatusCode, resp.Header, nil
 }
 
 func (c *authenticatedClient) DoAuthenticatedDelete(url string, accessToken string) (int, error) {

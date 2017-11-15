@@ -18,7 +18,7 @@ package dataflow
 
 import "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 
-func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.AuthenticatedClient) (string, error) {
-	return "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar", nil
+func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.AuthenticatedClient) (string, string, error) {
+	return "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar",
+		"9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453", nil
 }
-
