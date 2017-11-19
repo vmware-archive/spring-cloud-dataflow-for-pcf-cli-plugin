@@ -38,9 +38,11 @@ type fileCache struct {
 
 func (f *fileCache) Entry(Url string) CacheEntry {
 	return &fileCacheEntry{
-		downloadUrl:      Url,
-		downloadFile:     createFilePathForDownloadFile(Url, f.downloadsDirectory),
-		cacheEntriesFile: f.cacheEntriesFile,
+		downloadUrl:        Url,
+		downloadFile:       createFilePathForDownloadFile(Url, f.downloadsDirectory),
+		cacheEntriesFile:   f.cacheEntriesFile,
+		checksumCalculator: &checksumCalculator{},
+		etagHelper:         &etagHelper{},
 	}
 }
 
@@ -69,6 +71,85 @@ func NewCache() (*fileCache, error) {
 	}, nil
 }
 
+// Place checksum calculator functionality inside an interface to help with testing
+//go:generate counterfeiter -o ../downloadfakes/fake_checksumcalculator.go . ChecksumCalculator
+type ChecksumCalculator interface {
+	CalculateChecksum(filePath string) (string, error)
+}
+
+type checksumCalculator struct {
+}
+
+func (c *checksumCalculator) CalculateChecksum(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// Place etag handling functionality inside an interface to help with testing
+//go:generate counterfeiter -o ../downloadfakes/fake_etaghelper.go . EtagHelper
+type EtagHelper interface {
+	GetETagForUrl(url string, metadataFile string) (string, error)
+	SetEtagForUrl(url string, etag string, cacheEntriesFile string) error
+}
+
+type etagHelper struct {
+}
+
+func (h *etagHelper) GetETagForUrl(url string, metadataFile string) (string, error) {
+	cacheDataFile, err := os.Open(metadataFile)
+	if err != nil {
+		return "", err
+	}
+
+	defer cacheDataFile.Close()
+
+	scanner := bufio.NewScanner(cacheDataFile)
+	for scanner.Scan() {
+		scannedLine := scanner.Text()
+		if strings.HasPrefix(scannedLine, url+" : ") {
+			return strings.Split(scannedLine, " : ")[1], nil
+		}
+	}
+
+	return "", nil
+}
+
+func (h *etagHelper) SetEtagForUrl(url string, etag string, cacheEntriesFile string) error {
+	cacheBytes, err := ioutil.ReadFile(cacheEntriesFile)
+	if err != nil {
+		return err
+	}
+
+	cacheLines := strings.Split(string(cacheBytes), "\n")
+
+	existingEntryFound := false
+	for i, line := range cacheLines {
+		if strings.HasPrefix(line, url+" : ") {
+			cacheLines[i] = url + " : " + etag
+			existingEntryFound = true
+			break
+		}
+	}
+
+	if !existingEntryFound {
+		cacheLines = append(cacheLines, url+" : "+etag)
+	}
+
+	output := strings.Join(cacheLines, "\n")
+	return ioutil.WriteFile(cacheEntriesFile, []byte(output), cacheEntriesFilePerm)
+}
+
 // CacheEntry provides a cache of a single file and its etag.
 //go:generate counterfeiter -o ../downloadfakes/fake_cacheentry.go . CacheEntry
 type CacheEntry interface {
@@ -82,9 +163,11 @@ type CacheEntry interface {
 }
 
 type fileCacheEntry struct {
-	downloadUrl      string
-	downloadFile     string
-	cacheEntriesFile string
+	downloadUrl        string
+	downloadFile       string
+	cacheEntriesFile   string
+	checksumCalculator ChecksumCalculator
+	etagHelper         EtagHelper
 }
 
 func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
@@ -94,7 +177,7 @@ func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
 		path = ""
 	}
 
-	etag, err = getETagForUrl(f.downloadUrl, f.cacheEntriesFile)
+	etag, err = f.etagHelper.GetETagForUrl(f.downloadUrl, f.cacheEntriesFile)
 	return path, etag, err
 }
 
@@ -105,7 +188,7 @@ func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum str
 		return err
 	}
 
-	calculatedCheckSum, err := calculateChecksumOfFile(f.downloadFile)
+	calculatedCheckSum, err := f.checksumCalculator.CalculateChecksum(f.downloadFile)
 	if err != nil {
 		fmt.Printf("Error calculating checksum of %s: %s\n", f.downloadFile, err)
 		return err
@@ -116,7 +199,7 @@ func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum str
 	}
 
 	if etag != "" {
-		err = setEtagForUrl(f.downloadUrl, etag, f.cacheEntriesFile)
+		err = f.etagHelper.SetEtagForUrl(f.downloadUrl, etag, f.cacheEntriesFile)
 		if err != nil {
 			return err
 		}
@@ -142,22 +225,6 @@ func writeDataToNamedFile(data io.ReadCloser, filePath string) error {
 	return nil
 }
 
-func calculateChecksumOfFile(filePath string) (string, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
 func fileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 	return !os.IsNotExist(err)
@@ -168,7 +235,7 @@ func createDownloadsDirectory(dirPath string) error {
 }
 
 func createFilePathForDownloadFile(url string, destinationDirectory string) string {
-	tokens := strings.Split(url, "/")
+	tokens := strings.Split(url, string(os.PathSeparator))
 	fileName := tokens[len(tokens)-1]
 	filePath := path.Join(destinationDirectory, fileName)
 	return filePath
@@ -181,48 +248,4 @@ func getDownloadsDirectory() (string, error) {
 	}
 	dirPath := path.Join(dir, cfDataDirectory, scdfCacheDirectory)
 	return dirPath, createDownloadsDirectory(dirPath)
-}
-
-func getETagForUrl(url string, metadataFile string) (string, error) {
-	cacheDataFile, err := os.Open(metadataFile)
-	if err != nil {
-		return "", err
-	}
-
-	defer cacheDataFile.Close()
-
-	scanner := bufio.NewScanner(cacheDataFile)
-	for scanner.Scan() {
-		scannedLine := scanner.Text()
-		if strings.HasPrefix(scannedLine, url+" : ") {
-			return strings.Split(scannedLine, " : ")[1], nil
-		}
-	}
-
-	return "", nil
-}
-
-func setEtagForUrl(url string, etag string, cacheEntriesFile string) error {
-	cacheBytes, err := ioutil.ReadFile(cacheEntriesFile)
-	if err != nil {
-		return err
-	}
-
-	cacheLines := strings.Split(string(cacheBytes), "\n")
-
-	existingEntryFound := false
-	for i, line := range cacheLines {
-		if strings.HasPrefix(line, url+" : ") {
-			cacheLines[i] = url + " : " + etag
-			existingEntryFound = true
-			break
-		}
-	}
-
-	if !existingEntryFound {
-		cacheLines = append(cacheLines, url+" : "+etag)
-	}
-
-	output := strings.Join(cacheLines, "\n")
-	return ioutil.WriteFile(cacheEntriesFile, []byte(output), cacheEntriesFilePerm)
 }

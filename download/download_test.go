@@ -18,30 +18,30 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/downloadfakes"
 )
 
-var _ = Describe("Download", func() {
-	const (
-		errMessage        = "things can only get better"
-		ifNoneMatchHeader = "If-None-Match"
-		etagHeader        = "ETag"
-		etagValue         = "etag"
-		urlValue          = "http://some/remote/file"
-		checksumValue     = "checksum"
-	)
+const (
+	errMessage        = "things can only get better"
+	ifNoneMatchHeader = "If-None-Match"
+	etagHeader        = "ETag"
+	etagValue         = "etag"
+	urlValue          = "http://some/remote/file"
+	checksumValue     = "checksum"
+)
 
-	var (
-		downloader       download.Downloader
-		fakeCache        *downloadfakes.FakeCache
-		fakeCacheEntry   *downloadfakes.FakeCacheEntry
-		fakeHttpHelper   *downloadfakes.FakeHttpHelper
-		fakeHttpRequest  *downloadfakes.FakeHttpRequest
-		fakeHttpResponse *downloadfakes.FakeHttpResponse
-		filePath         string
-		etag             string
-		testError        error
-		err              error
-		url              string
-		checksum         string
-	)
+var (
+	downloader       download.Downloader
+	fakeCache        *downloadfakes.FakeCache
+	fakeCacheEntry   *downloadfakes.FakeCacheEntry
+	fakeHttpHelper   *downloadfakes.FakeHttpHelper
+	fakeHttpRequest  *downloadfakes.FakeHttpRequest
+	fakeHttpResponse *downloadfakes.FakeHttpResponse
+	filePath         string
+	etag             string
+	testError        error
+	err              error
+	url              string
+)
+
+var _ = Describe("Download", func() {
 
 	BeforeEach(func() {
 		fakeCache = &downloadfakes.FakeCache{}
@@ -52,7 +52,6 @@ var _ = Describe("Download", func() {
 		etag = etagValue
 		testError = errors.New(errMessage)
 		url = urlValue
-		checksum = checksumValue
 
 		downloader, err = download.NewDownloader(fakeCache, fakeHttpHelper)
 	})
@@ -230,6 +229,78 @@ var _ = Describe("Download", func() {
 				})
 			})
 		})
+	})
+})
 
+var _ = Describe("HttpRequest", func() {
+
+	var (
+		request        download.HttpRequest
+		response       download.HttpResponse
+		fakeHttpClient *downloadfakes.FakeHttpClient
+	)
+
+	BeforeEach(func() {
+		fakeHttpClient = &downloadfakes.FakeHttpClient{}
+		testError = errors.New(errMessage)
+
+		request, err = download.NewHttpHelper().CreateHttpRequest(http.MethodGet, url)
+
+		if request, ok := request.(download.HttpClientSetter); ok {
+			request.SetHttpClient(fakeHttpClient)
+		} else {
+			Fail("request did not implement HttpClientSetter")
+		}
+	})
+
+	Describe("SetHeader", func() {
+		JustBeforeEach(func() {
+			request.SetHeader(etagHeader, etagValue)
+		})
+
+		It("should have set the specified header with the supplied value", func() {
+			if request, ok := request.(download.RequestFieldGetter); ok {
+				Expect(request.GetHeaderMap().Get(etagHeader)).To(Equal(etagValue))
+			} else {
+				Fail("request did not implement RequestFieldGetter")
+			}
+		})
+	})
+
+	Describe("SendRequest", func() {
+		JustBeforeEach(func() {
+			response, err = request.SendRequest()
+		})
+
+		Context("when sending the HTTP request results in an error", func() {
+			BeforeEach(func() {
+				fakeHttpClient.DoReturns(nil, testError)
+			})
+
+			It("should propagate the error", func() {
+				Expect(err).To(MatchError(testError))
+			})
+		})
+
+		Context("when sending the HTTP request is successful", func() {
+			var goodResponse = &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       ioutil.NopCloser(bytes.NewReader([]byte("response body"))),
+			}
+
+			BeforeEach(func() {
+				fakeHttpClient.DoReturns(goodResponse, nil)
+			})
+
+			It("should return a new HttpResponse that wraps the low level response", func() {
+				buf := new(bytes.Buffer)
+				buf.ReadFrom(response.GetBody())
+				bodyString := buf.String()
+				Expect(bodyString).To(Equal("response body"))
+
+				Expect(response.GetStatusCode()).To(Equal(http.StatusOK))
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
 	})
 })
