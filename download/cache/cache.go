@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,8 +12,6 @@ import (
 	"crypto/sha256"
 
 	"io/ioutil"
-
-	"code.cloudfoundry.org/cli/cf/errors"
 )
 
 const (
