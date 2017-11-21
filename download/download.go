@@ -60,6 +60,20 @@ func NewHttpResponse(response *http.Response) *httpResponse {
 	}
 }
 
+// Added to allow testing of HTTP client usage
+//go:generate counterfeiter -o downloadfakes/fake_httpclient.go . HttpClient
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type httpClient struct {
+	client *http.Client
+}
+
+func (hc *httpClient) Do(req *http.Request) (*http.Response, error) {
+	return hc.client.Do(req)
+}
+
 // Wrap Http request interactions inside an interface whose behaviour can be faked in tests
 //go:generate counterfeiter -o downloadfakes/fake_httprequest.go . HttpRequest
 type HttpRequest interface {
@@ -68,7 +82,7 @@ type HttpRequest interface {
 }
 
 type httpRequest struct {
-	client  *http.Client
+	client  HttpClient
 	request *http.Request
 }
 
@@ -105,7 +119,7 @@ func (h *httpHelper) CreateHttpRequest(method string, url string) (HttpRequest, 
 	}
 
 	return &httpRequest{
-		client:  cl,
+		client:  &httpClient{cl},
 		request: req,
 	}, nil
 }
