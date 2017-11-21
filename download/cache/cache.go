@@ -9,8 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"crypto/sha256"
-
+	"hash"
 	"io/ioutil"
 )
 
@@ -54,12 +53,7 @@ func NewCache() (*fileCache, error) {
 
 	cacheDataFile := path.Join(downloadsDir, cacheEntriesFileName)
 	if !fileExists(cacheDataFile) {
-		_, err := os.Create(cacheDataFile)
-		if err != nil {
-			return nil, err
-		}
-
-		err = os.Chmod(cacheDataFile, cacheEntriesFilePerm)
+		_, err := os.OpenFile(cacheDataFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cacheEntriesFilePerm)
 		if err != nil {
 			return nil, err
 		}
@@ -74,26 +68,24 @@ func NewCache() (*fileCache, error) {
 // Place checksum calculator functionality inside an interface to help with testing
 //go:generate counterfeiter -o ../downloadfakes/fake_checksumcalculator.go . ChecksumCalculator
 type ChecksumCalculator interface {
-	CalculateChecksum(filePath string) (string, error)
+	CalculateChecksum(filePath string, hashFunc hash.Hash) (string, error)
 }
 
 type checksumCalculator struct {
 }
 
-func (c *checksumCalculator) CalculateChecksum(filePath string) (string, error) {
+func (c *checksumCalculator) CalculateChecksum(filePath string, hash hash.Hash) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
-
 	defer f.Close()
 
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(hash, f); err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 // Place etag handling functionality inside an interface to help with testing
@@ -158,8 +150,8 @@ type CacheEntry interface {
 
 	// Store writes the cached file contents and associates the given etag (which  may be empty) with the file.
 	// If the file contents cannot be written or the etag associated with the file, an error is returned.
-	// The file contents are checked against the given checksum and an error is returned if the check fails.
-	Store(contents io.ReadCloser, etag string, checksum string) error
+	// The file contents are checked against the given checksum using the given hash and an error is returned if the check fails.
+	Store(contents io.ReadCloser, etag string, checksum string, hashFunc hash.Hash) error
 }
 
 type fileCacheEntry struct {
@@ -181,14 +173,14 @@ func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
 	return path, etag, err
 }
 
-func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum string) error {
+func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum string, hash hash.Hash) error {
 	err := writeDataToNamedFile(contents, f.downloadFile)
 	if err != nil {
 		fmt.Printf("Error downloading %s: %s\n", f.downloadFile, err)
 		return err
 	}
 
-	calculatedCheckSum, err := f.checksumCalculator.CalculateChecksum(f.downloadFile)
+	calculatedCheckSum, err := f.checksumCalculator.CalculateChecksum(f.downloadFile, hash)
 	if err != nil {
 		fmt.Printf("Error calculating checksum of %s: %s\n", f.downloadFile, err)
 		return err

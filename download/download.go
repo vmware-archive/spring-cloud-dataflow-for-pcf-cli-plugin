@@ -22,6 +22,8 @@ import (
 	"io"
 	"net/http"
 
+	"crypto/sha256"
+
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 )
 
@@ -99,7 +101,6 @@ func (h *httpRequest) SendRequest() (HttpResponse, error) {
 	return NewHttpResponse(resp), nil
 }
 
-// TODO: Move this type out of this package
 //go:generate counterfeiter -o downloadfakes/fake_httphelper.go . HttpHelper
 type HttpHelper interface {
 	CreateHttpRequest(method string, url string) (HttpRequest, error)
@@ -177,7 +178,7 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 	if response.GetStatusCode() == http.StatusOK {
 		fmt.Printf("Downloading %s\n", url)
 		newEtagValue := response.GetHeader(etagHeader)
-		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum)
+		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, sha256.New())
 		return downloadedFilePath, err
 	}
 

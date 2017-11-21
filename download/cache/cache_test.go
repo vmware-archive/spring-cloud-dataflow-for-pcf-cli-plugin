@@ -16,6 +16,9 @@ import (
 
 	"bufio"
 
+	"crypto/sha256"
+	"hash"
+
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/downloadfakes"
 )
@@ -64,14 +67,61 @@ var _ = Describe("Cache", func() {
 		url            string
 	)
 
-	BeforeEach(func() {
-		testError = errors.New(errMessage)
-		url = urlValue
+	Describe("NewCache", func() {
 
-		downloadsCache, err = cache.NewCache()
+		JustBeforeEach(func() {
+			downloadsCache, err = cache.NewCache()
+		})
+
+		Context("when the downloads directory cannot be created", func() {
+			var downloadsDir string
+
+			BeforeEach(func() {
+				downloadsParentDir := path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf")
+				Expect(os.MkdirAll(downloadsParentDir, 0755)).To(Succeed())
+				downloadsDir = path.Join(downloadsParentDir, "cache")
+				Expect(os.RemoveAll(downloadsDir)).To(Succeed())
+				Expect(ioutil.WriteFile(downloadsDir, []byte("x"), 0755)).To(Succeed())
+			})
+
+			AfterEach(func() {
+				Expect(os.Remove(downloadsDir)).To(Succeed())
+			})
+
+			It("should propagate the error", func() {
+				Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+			})
+		})
+
+		Context("when the cache data file cannot be created", func() {
+			var downloadsDir string
+
+			BeforeEach(func() {
+				downloadsParentDir := path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf")
+				Expect(os.MkdirAll(downloadsParentDir, 0755)).To(Succeed())
+				downloadsDir = path.Join(downloadsParentDir, "cache")
+				Expect(os.RemoveAll(downloadsDir)).To(Succeed())
+				Expect(os.Mkdir(downloadsDir, 0555)).To(Succeed())
+			})
+
+			AfterEach(func() {
+				Expect(os.Remove(downloadsDir)).To(Succeed())
+			})
+
+			It("should propagate the error", func() {
+				Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+			})
+		})
 	})
 
 	Describe("Entry", func() {
+		BeforeEach(func() {
+			testError = errors.New(errMessage)
+			url = urlValue
+
+			downloadsCache, err = cache.NewCache()
+		})
+
 		Context("when CF_HOME is set", func() {
 			JustBeforeEach(func() {
 				cacheEntry = downloadsCache.Entry(url)
@@ -178,7 +228,7 @@ var _ = Describe("CacheEntry", func() {
 
 	const (
 		etagValue             = "etag"
-		checksumValue         = "checksum"
+		checksumValue         = "79dbdd760b4e80686e81c81466424ca6a21ed70b353a19e2154984e41a3e6e4b"
 		downloadContentString = "download content"
 	)
 
@@ -192,6 +242,7 @@ var _ = Describe("CacheEntry", func() {
 		etagArgument           string
 		testError              error
 		err                    error
+		hashFunc               hash.Hash
 	)
 
 	BeforeEach(func() {
@@ -211,112 +262,240 @@ var _ = Describe("CacheEntry", func() {
 
 		cacheEntry = downloadsCache.Entry(urlValue)
 
-		if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
-			cacheEntry.SetChecksumCalculator(fakeChecksumCalculator)
-			cacheEntry.SetEtagHelper(fakeEtagHelper)
-		} else {
-			Fail("cache entry did not implement FieldSetter")
-		}
+		hashFunc = sha256.New()
+	})
+
+	Describe("Retrieve", func() {
+		It("should return an empty path when the file has not been cached", func() {
+			path, _, err := cacheEntry.Retrieve()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(path).To(BeEmpty())
+		})
 	})
 
 	Describe("Store", func() {
 		JustBeforeEach(func() {
-			err = cacheEntry.Store(downloadContent, etagArgument, checksumValue)
+			err = cacheEntry.Store(downloadContent, etagArgument, checksumValue, hashFunc)
 		})
 
-		Context("in the normal case", func() {
+		Context("with actual dependencies", func() {
+			It("should succeed", func() {
+				Expect(err).To(Succeed())
+			})
+
+			It("should return the correct etag on retrieval", func() {
+				_, etag, err := cacheEntry.Retrieve()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(etag).To(Equal(etagValue))
+			})
+
+			Context("when the metadata file cannot be opened", func() {
+				BeforeEach(func() {
+					var etagHelper cache.EtagHelper
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
+						etagHelper = cacheEntry.GetEtagHelper()
+					} else {
+						Fail("cache entry did not implement FieldGetter")
+					}
+
+					fakeEtagHelper.GetETagForUrlStub = func(url string, metadataFile string) (string, error) {
+						Expect(os.Remove(metadataFile)).To(Succeed())
+						return etagHelper.GetETagForUrl(url, metadataFile)
+					}
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
+						cacheEntry.SetEtagHelper(fakeEtagHelper)
+					} else {
+						Fail("cache entry did not implement FieldSetter")
+					}
+				})
+
+				It("should percolate the error", func() {
+					_, _, err := cacheEntry.Retrieve()
+					Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+				})
+			})
+
+			Context("when the download content cannot be read", func() {
+				BeforeEach(func() {
+					downloadContent = ioutil.NopCloser(badReader{})
+				})
+
+				It("should percolate the error", func() {
+					Expect(err).To(MatchError("read error"))
+				})
+			})
+
+			Context("when the stored file cannot be read to calculate its checksum", func() {
+				BeforeEach(func() {
+					var checksumCalculator cache.ChecksumCalculator
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
+						checksumCalculator = cacheEntry.GetChecksumCalculator()
+					} else {
+						Fail("cache entry did not implement FieldGetter")
+					}
+
+					fakeChecksumCalculator.CalculateChecksumStub = func(filePath string, hashFunc hash.Hash) (string, error) {
+						Expect(os.Remove(filePath)).To(Succeed())
+						return checksumCalculator.CalculateChecksum(filePath, hashFunc)
+					}
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
+						cacheEntry.SetChecksumCalculator(fakeChecksumCalculator)
+					} else {
+						Fail("cache entry did not implement FieldSetter")
+					}
+				})
+
+				It("should percolate the error", func() {
+					Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+				})
+			})
+
+			Context("when the checksum accumulation fails", func() {
+				BeforeEach(func() {
+					hashFunc = badHash{}
+				})
+
+				It("should percolate the error", func() {
+					Expect(err).To(MatchError("write error"))
+				})
+			})
+
+			Context("when the cache entries file cannot be read", func() {
+				BeforeEach(func() {
+					var etagHelper cache.EtagHelper
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
+						etagHelper = cacheEntry.GetEtagHelper()
+					} else {
+						Fail("cache entry did not implement FieldGetter")
+					}
+
+					fakeEtagHelper.SetEtagForUrlStub = func(url string, etag string, cacheEntriesFile string) error {
+						Expect(os.Remove(cacheEntriesFile)).To(Succeed())
+						return etagHelper.SetEtagForUrl(url, etag, cacheEntriesFile)
+					}
+
+					if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
+						cacheEntry.SetEtagHelper(fakeEtagHelper)
+					} else {
+						Fail("cache entry did not implement FieldSetter")
+					}
+				})
+
+				It("should percolate the error", func() {
+					Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+				})
+			})
+		})
+
+		Context("with fake dependencies", func() {
 			BeforeEach(func() {
-				fakeChecksumCalculator.CalculateChecksumReturns(checksumValue, nil)
-			})
-
-			It("should create the file with the expected name in the expected location", func() {
-				Expect(fileExists(downloadFilePath)).To(BeTrue())
-			})
-
-			It("should write the supplied data into the download file", func() {
-				fileContent, err := readTestFileContent(downloadFilePath)
-				if err != nil {
-					Fail(fmt.Sprintf("Unable to read test file %s\n", downloadFilePath))
+				if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
+					cacheEntry.SetChecksumCalculator(fakeChecksumCalculator)
+					cacheEntry.SetEtagHelper(fakeEtagHelper)
+				} else {
+					Fail("cache entry did not implement FieldSetter")
 				}
-				Expect(fileContent).To(Equal(downloadContentString))
 			})
 
-			It("should calculate the checksum value of the downloaded file", func() {
-				Expect(fakeChecksumCalculator.CalculateChecksumCallCount()).To(Equal(1))
-			})
-
-			Context("when an error occurs calculating the checksum", func() {
+			Context("in the normal case", func() {
 				BeforeEach(func() {
-					fakeChecksumCalculator.CalculateChecksumReturns("", testError)
+					fakeChecksumCalculator.CalculateChecksumReturns(checksumValue, nil)
 				})
 
-				It("should propagate the error", func() {
-					Expect(err).To(MatchError(testError))
-				})
-			})
-
-			Context("when the calculated checksum does not match the supplied value", func() {
-				BeforeEach(func() {
-					fakeChecksumCalculator.CalculateChecksumReturns("unexpected value", nil)
+				It("should create the file with the expected name in the expected location", func() {
+					Expect(fileExists(downloadFilePath)).To(BeTrue())
 				})
 
-				It("should raise an error", func() {
-					Expect(err).To(MatchError(fmt.Sprintf("Downloaded file '%s' checksum does not match supplied value", downloadFilePath)))
-				})
-			})
-
-			Context("when the supplied etag value is not an empty string", func() {
-				It("should set the etag value in the cache entries file", func() {
-					Expect(fakeEtagHelper.SetEtagForUrlCallCount()).To(Equal(1))
-
-					urlArg, etagArg, cacheEntriesFilePath := fakeEtagHelper.SetEtagForUrlArgsForCall(0)
-					Expect(urlArg).To(Equal(urlValue))
-					Expect(etagArg).To(Equal(etagValue))
-					Expect(cacheEntriesFilePath).Should(HaveSuffix(".cachedata"))
+				It("should write the supplied data into the download file", func() {
+					fileContent, err := readTestFileContent(downloadFilePath)
+					if err != nil {
+						Fail(fmt.Sprintf("Unable to read test file %s\n", downloadFilePath))
+					}
+					Expect(fileContent).To(Equal(downloadContentString))
 				})
 
-				Context("when trying to set the etag value fails with an error", func() {
+				It("should calculate the checksum value of the downloaded file", func() {
+					Expect(fakeChecksumCalculator.CalculateChecksumCallCount()).To(Equal(1))
+				})
+
+				Context("when an error occurs calculating the checksum", func() {
 					BeforeEach(func() {
-						fakeEtagHelper.SetEtagForUrlReturns(testError)
+						fakeChecksumCalculator.CalculateChecksumReturns("", testError)
 					})
 
 					It("should propagate the error", func() {
 						Expect(err).To(MatchError(testError))
 					})
 				})
+
+				Context("when the calculated checksum does not match the supplied value", func() {
+					BeforeEach(func() {
+						fakeChecksumCalculator.CalculateChecksumReturns("unexpected value", nil)
+					})
+
+					It("should raise an error", func() {
+						Expect(err).To(MatchError(fmt.Sprintf("Downloaded file '%s' checksum does not match supplied value", downloadFilePath)))
+					})
+				})
+
+				Context("when the supplied etag value is not an empty string", func() {
+					It("should set the etag value in the cache entries file", func() {
+						Expect(fakeEtagHelper.SetEtagForUrlCallCount()).To(Equal(1))
+
+						urlArg, etagArg, cacheEntriesFilePath := fakeEtagHelper.SetEtagForUrlArgsForCall(0)
+						Expect(urlArg).To(Equal(urlValue))
+						Expect(etagArg).To(Equal(etagValue))
+						Expect(cacheEntriesFilePath).Should(HaveSuffix(".cachedata"))
+					})
+
+					Context("when trying to set the etag value fails with an error", func() {
+						BeforeEach(func() {
+							fakeEtagHelper.SetEtagForUrlReturns(testError)
+						})
+
+						It("should propagate the error", func() {
+							Expect(err).To(MatchError(testError))
+						})
+					})
+				})
+
+				Context("when the supplied etag value is an empty string", func() {
+					BeforeEach(func() {
+						etagArgument = ""
+					})
+
+					It("should not try to set the etag value in the cache entries file", func() {
+						Expect(fakeEtagHelper.SetEtagForUrlCallCount()).To(Equal(0))
+					})
+				})
 			})
 
-			Context("when the supplied etag value is an empty string", func() {
+			Context("when it is not possible to create the download file", func() {
 				BeforeEach(func() {
-					etagArgument = ""
+					// make the cache entries directory read only
+					permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0444)
+					if permChangeErr != nil {
+						Fail("Unable to make test directory read-only to simulate error situation")
+					}
 				})
 
-				It("should not try to set the etag value in the cache entries file", func() {
-					Expect(fakeEtagHelper.SetEtagForUrlCallCount()).To(Equal(0))
+				It("should propagate the error", func() {
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).Should(HaveSuffix("permission denied"))
 				})
-			})
-		})
 
-		Context("when it is not possible to create the download file", func() {
-			BeforeEach(func() {
-				// make the cache entries directory read only
-				permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0444)
-				if permChangeErr != nil {
-					Fail("Unable to make test directory read-only to simulate error situation")
-				}
-			})
-
-			It("should propagate the error", func() {
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).Should(HaveSuffix("permission denied"))
-			})
-
-			AfterEach(func() {
-				// make the cache entries directory writable once again
-				permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0755)
-				if permChangeErr != nil {
-					Fail("Unable to make test directory writable")
-				}
+				AfterEach(func() {
+					// make the cache entries directory writable once again
+					permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0755)
+					if permChangeErr != nil {
+						Fail("Unable to make test directory writable")
+					}
+				})
 			})
 		})
 	})
@@ -338,4 +517,32 @@ func readTestFileContent(testFilePath string) (string, error) {
 func fileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 	return !os.IsNotExist(err)
+}
+
+type badReader struct{}
+
+func (badReader) Read([]byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+type badHash struct{}
+
+func (badHash) Write([]byte) (n int, err error) {
+	return 0, errors.New("write error")
+}
+
+func (badHash) Sum([]byte) []byte {
+	panic("not implemented")
+}
+
+func (badHash) Reset() {
+	panic("not implemented")
+}
+
+func (badHash) Size() int {
+	panic("not implemented")
+}
+
+func (badHash) BlockSize() int {
+	panic("not implemented")
 }

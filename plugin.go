@@ -105,8 +105,10 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 		return err
 	}
 
-	// TODO: the packages of the download cache and the http helper are subject to change
-	downloadCache, _ := cache.NewCache()
+	downloadCache, err := cache.NewCache()
+	if err != nil {
+		return err
+	}
 	httpHelper := download.NewHttpHelper()
 	downloader, err := download.NewDownloader(downloadCache, httpHelper)
 	if err != nil {

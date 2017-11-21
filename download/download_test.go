@@ -27,21 +27,21 @@ const (
 	checksumValue     = "checksum"
 )
 
-var (
-	downloader       download.Downloader
-	fakeCache        *downloadfakes.FakeCache
-	fakeCacheEntry   *downloadfakes.FakeCacheEntry
-	fakeHttpHelper   *downloadfakes.FakeHttpHelper
-	fakeHttpRequest  *downloadfakes.FakeHttpRequest
-	fakeHttpResponse *downloadfakes.FakeHttpResponse
-	filePath         string
-	etag             string
-	testError        error
-	err              error
-	url              string
-)
-
 var _ = Describe("Download", func() {
+
+	var (
+		downloader       download.Downloader
+		fakeCache        *downloadfakes.FakeCache
+		fakeCacheEntry   *downloadfakes.FakeCacheEntry
+		fakeHttpHelper   *downloadfakes.FakeHttpHelper
+		fakeHttpRequest  *downloadfakes.FakeHttpRequest
+		fakeHttpResponse *downloadfakes.FakeHttpResponse
+		filePath         string
+		etag             string
+		testError        error
+		err              error
+		url              string
+	)
 
 	BeforeEach(func() {
 		fakeCache = &downloadfakes.FakeCache{}
@@ -198,7 +198,7 @@ var _ = Describe("Download", func() {
 					It("should try and store the file in the cache", func() {
 						Expect(fakeCacheEntry.StoreCallCount()).To(Equal(1))
 
-						contentsArg, tagArg, checksumArg := fakeCacheEntry.StoreArgsForCall(0)
+						contentsArg, tagArg, checksumArg, _ := fakeCacheEntry.StoreArgsForCall(0)
 						Expect(contentsArg).To(Equal(responseBody))
 						Expect(tagArg).To(Equal(etagValue))
 						Expect(checksumArg).To(Equal(checksumValue))
@@ -233,74 +233,130 @@ var _ = Describe("Download", func() {
 })
 
 var _ = Describe("HttpRequest", func() {
-
 	var (
-		request        download.HttpRequest
-		response       download.HttpResponse
-		fakeHttpClient *downloadfakes.FakeHttpClient
+		testError error
+		err       error
+		url       string
 	)
 
-	BeforeEach(func() {
-		fakeHttpClient = &downloadfakes.FakeHttpClient{}
-		testError = errors.New(errMessage)
+	Context("with fake dependency", func() {
+		var (
+			request        download.HttpRequest
+			response       download.HttpResponse
+			fakeHttpClient *downloadfakes.FakeHttpClient
+		)
 
-		request, err = download.NewHttpHelper().CreateHttpRequest(http.MethodGet, url)
+		BeforeEach(func() {
+			fakeHttpClient = &downloadfakes.FakeHttpClient{}
+			testError = errors.New(errMessage)
 
-		if request, ok := request.(download.HttpClientSetter); ok {
-			request.SetHttpClient(fakeHttpClient)
-		} else {
-			Fail("request did not implement HttpClientSetter")
-		}
-	})
+			request, err = download.NewHttpHelper().CreateHttpRequest(http.MethodGet, url)
 
-	Describe("SetHeader", func() {
-		JustBeforeEach(func() {
-			request.SetHeader(etagHeader, etagValue)
-		})
-
-		It("should have set the specified header with the supplied value", func() {
-			if request, ok := request.(download.RequestFieldGetter); ok {
-				Expect(request.GetHeaderMap().Get(etagHeader)).To(Equal(etagValue))
+			if request, ok := request.(download.HttpClientSetter); ok {
+				request.SetHttpClient(fakeHttpClient)
 			} else {
-				Fail("request did not implement RequestFieldGetter")
+				Fail("request did not implement HttpClientSetter")
 			}
+		})
+
+		Describe("SetHeader", func() {
+			JustBeforeEach(func() {
+				request.SetHeader(etagHeader, etagValue)
+			})
+
+			It("should have set the specified header with the supplied value", func() {
+				if request, ok := request.(download.RequestFieldGetter); ok {
+					Expect(request.GetHeaderMap().Get(etagHeader)).To(Equal(etagValue))
+				} else {
+					Fail("request did not implement RequestFieldGetter")
+				}
+			})
+		})
+
+		Describe("SendRequest", func() {
+			JustBeforeEach(func() {
+				response, err = request.SendRequest()
+			})
+
+			Context("when sending the HTTP request results in an error", func() {
+				BeforeEach(func() {
+					fakeHttpClient.DoReturns(nil, testError)
+				})
+
+				It("should propagate the error", func() {
+					Expect(err).To(MatchError(testError))
+				})
+			})
+
+			Context("when sending the HTTP request is successful", func() {
+				var goodResponse = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       ioutil.NopCloser(bytes.NewReader([]byte("response body"))),
+				}
+
+				BeforeEach(func() {
+					fakeHttpClient.DoReturns(goodResponse, nil)
+				})
+
+				It("should return a new HttpResponse that wraps the low level response", func() {
+					buf := new(bytes.Buffer)
+					buf.ReadFrom(response.GetBody())
+					bodyString := buf.String()
+					Expect(bodyString).To(Equal("response body"))
+
+					Expect(response.GetStatusCode()).To(Equal(http.StatusOK))
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
 		})
 	})
 
-	Describe("SendRequest", func() {
+	Context("with actual dependency", func() {
+		var (
+			request download.HttpRequest
+			err     error
+		)
+
 		JustBeforeEach(func() {
-			response, err = request.SendRequest()
+			_, err = request.SendRequest()
 		})
 
-		Context("when sending the HTTP request results in an error", func() {
+		Context("when the URL is empty", func() {
 			BeforeEach(func() {
-				fakeHttpClient.DoReturns(nil, testError)
-			})
-
-			It("should propagate the error", func() {
-				Expect(err).To(MatchError(testError))
-			})
-		})
-
-		Context("when sending the HTTP request is successful", func() {
-			var goodResponse = &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(bytes.NewReader([]byte("response body"))),
-			}
-
-			BeforeEach(func() {
-				fakeHttpClient.DoReturns(goodResponse, nil)
-			})
-
-			It("should return a new HttpResponse that wraps the low level response", func() {
-				buf := new(bytes.Buffer)
-				buf.ReadFrom(response.GetBody())
-				bodyString := buf.String()
-				Expect(bodyString).To(Equal("response body"))
-
-				Expect(response.GetStatusCode()).To(Equal(http.StatusOK))
+				request, err = download.NewHttpHelper().CreateHttpRequest(http.MethodGet, "")
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("should return a suitable error", func() {
+				Expect(err.Error()).To(ContainSubstring("unsupported protocol scheme"))
+			})
 		})
+	})
+})
+
+var _ = Describe("HttpResponse", func() {
+	var (
+		response download.HttpResponse
+	)
+
+	Describe("GetHeader", func() {
+		Context("when the response contains a header", func() {
+			BeforeEach(func() {
+				response = download.NewHttpResponse(&http.Response{
+					Header: http.Header{"Accept-Encoding": []string{"gzip", "deflate"}},
+				})
+			})
+
+			It("should return the header", func() {
+				Expect(response.GetHeader("Accept-Encoding")).To(Equal("gzip"))
+			})
+		})
+	})
+})
+
+var _ = Describe("CreateHttpRequest", func() {
+	It("should return a suitable error when the method is unknown", func() {
+		_, err := download.NewHttpHelper().CreateHttpRequest("bad method", "http://example.com")
+		Expect(err).To(MatchError(`net/http: invalid method "bad method"`))
 	})
 })
