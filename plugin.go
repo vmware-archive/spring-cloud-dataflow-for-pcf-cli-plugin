@@ -33,9 +33,9 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/format"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/java"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/serviceutil"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/shell"
 )
 
 // Plugin version. Substitute "<major>.<minor>.<build>" at build time, e.g. using -ldflags='-X main.pluginVersion=1.2.3'
@@ -121,7 +121,17 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 	}
 
 	fmt.Fprintln(progressWriter, "Launching dataflow shell JAR")
-	return shell.RunShell(shellCommand(filePath))
+	err = java.RunShell(shellCommand(filePath))
+	if err != nil {
+		fmt.Fprintln(progressWriter, "Launching dataflow shell JAR failed. Checking java installation")
+		checkErr := java.Check(progressWriter, err)
+		if checkErr != nil {
+			return fmt.Errorf("java is needed. Please install a JRE or JDK and try again. Details: %s", checkErr.Error())
+		}
+		fmt.Fprintln(progressWriter, "java installation appears to be ok. Any error messages above may indicate why launching dataflow shell JAR failed.")
+
+	}
+	return err
 }
 
 func getDataflowServerInstanceName(ac *cli.ArgConsumer) string {

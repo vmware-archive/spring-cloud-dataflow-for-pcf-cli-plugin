@@ -14,41 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package shell
+package java
 
 import (
-	"fmt"
 	"io"
-	"os"
 	"os/exec"
 )
 
-func RunShell(cmd *exec.Cmd) error {
-	cmd.Env = envVars("PATH", "HOME", "CF_HOME")
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		fmt.Printf("Error accessing shell's standard input pipe: %s\n", err)
-		return err
-	}
-	defer stdin.Close()
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	go func() {
-		io.Copy(stdin, os.Stdin)
-	}()
-
+func Check(writer io.Writer, err error) error {
+	cmd := exec.Command("java", "-version")
+	cmd.Env = envVars("PATH")
+	cmd.Stdout = writer
+	cmd.Stderr = writer
 	return cmd.Run()
-}
-
-func envVars(keys ...string) []string {
-	vars := []string{}
-	for _, key := range keys {
-		if val, set := os.LookupEnv(key); set {
-			vars = append(vars, fmt.Sprintf("%s=%s", key, val))
-		}
-	}
-	return vars
 }
