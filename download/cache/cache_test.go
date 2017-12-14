@@ -70,7 +70,7 @@ var _ = Describe("Cache", func() {
 	Describe("NewCache", func() {
 
 		JustBeforeEach(func() {
-			downloadsCache, err = cache.NewCache()
+			downloadsCache, err = cache.NewCache(GinkgoWriter)
 		})
 
 		Context("when the downloads directory cannot be created", func() {
@@ -119,7 +119,7 @@ var _ = Describe("Cache", func() {
 			testError = errors.New(errMessage)
 			url = urlValue
 
-			downloadsCache, err = cache.NewCache()
+			downloadsCache, err = cache.NewCache(GinkgoWriter)
 		})
 
 		Context("when CF_HOME is set", func() {
@@ -189,7 +189,7 @@ var _ = Describe("Cache", func() {
 			})
 
 			JustBeforeEach(func() {
-				downloadsCache, err = cache.NewCache()
+				downloadsCache, err = cache.NewCache(GinkgoWriter)
 				cacheEntry = downloadsCache.Entry(url)
 			})
 
@@ -248,7 +248,7 @@ var _ = Describe("CacheEntry", func() {
 	BeforeEach(func() {
 		downloadFilePath = path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache", "file.extension")
 
-		downloadsCache, err = cache.NewCache()
+		downloadsCache, err = cache.NewCache(GinkgoWriter)
 
 		downloadContent = ioutil.NopCloser(bytes.NewReader([]byte(downloadContentString)))
 

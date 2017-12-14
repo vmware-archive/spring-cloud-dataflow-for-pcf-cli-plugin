@@ -28,6 +28,7 @@ const (
 	etagValue         = "etag"
 	urlValue          = "http://some/remote/file"
 	checksumValue     = "checksum"
+	testFilePath      = "/some/path"
 )
 
 var _ = Describe("Download", func() {
@@ -58,7 +59,7 @@ var _ = Describe("Download", func() {
 		testError = errors.New(errMessage)
 		url = urlValue
 
-		downloader, err = download.NewDownloader(fakeCache, fakeHttpHelper)
+		downloader, err = download.NewDownloader(fakeCache, fakeHttpHelper, GinkgoWriter)
 	})
 
 	Describe("DownloadFile", func() {
@@ -112,30 +113,54 @@ var _ = Describe("Download", func() {
 					})
 
 					It("should propagate the error", func() {
-						Expect(err).To(MatchError(errMessage))
+						Expect(err).To(MatchError(fmt.Sprintf(`CreateHttpRequest for download URL "http://some/remote/file" failed: %s`, errMessage)))
 					})
 				})
 
-				Context("when the retrieved cache entry contained a non empty etag value", func() {
-					BeforeEach(func() {
-						fakeCacheEntry.RetrieveReturns(filePath, etag, nil)
+				Context("when the retrieved cache entry contains a non empty file path", func() {
+					Context("when the retrieved cache entry contains a non-empty etag value", func() {
+						BeforeEach(func() {
+							fakeCacheEntry.RetrieveReturns(testFilePath, etag, nil)
+						})
+
+						It("should set the If-None-Match header request header with the etag value", func() {
+							Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(1))
+							headerKey, headerValue := fakeHttpRequest.SetHeaderArgsForCall(0)
+							Expect(headerKey).To(Equal(ifNoneMatchHeader))
+							Expect(headerValue).To(Equal(etag))
+						})
 					})
 
-					It("should set the If-None-Match header request header with the etag value", func() {
-						Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(1))
-						headerKey, headerValue := fakeHttpRequest.SetHeaderArgsForCall(0)
-						Expect(headerKey).To(Equal(ifNoneMatchHeader))
-						Expect(headerValue).To(Equal(etag))
+					Context("when the retrieved cache entry contains an empty etag value", func() {
+						BeforeEach(func() {
+							fakeCacheEntry.RetrieveReturns(testFilePath, "", nil)
+						})
+
+						It("should not try to set the If-None-Match request header", func() {
+							Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(0))
+						})
 					})
 				})
 
-				Context("when the retrieved cache entry contained an empty etag value", func() {
-					BeforeEach(func() {
-						fakeCacheEntry.RetrieveReturns(filePath, "", nil)
+				Context("when the retrieved cache entry contains an empty file path", func() {
+					Context("when the retrieved cache entry contains a non-empty etag value", func() {
+						BeforeEach(func() {
+							fakeCacheEntry.RetrieveReturns("", etag, nil)
+						})
+
+						It("should not try to set the If-None-Match request header", func() {
+							Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(0))
+						})
 					})
 
-					It("should not try to set the If-None-Match request header", func() {
-						Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(0))
+					Context("when the retrieved cache entry contains an empty etag value", func() {
+						BeforeEach(func() {
+							fakeCacheEntry.RetrieveReturns("", "", nil)
+						})
+
+						It("should not try to set the If-None-Match request header", func() {
+							Expect(fakeHttpRequest.SetHeaderCallCount()).To(Equal(0))
+						})
 					})
 				})
 
@@ -149,7 +174,7 @@ var _ = Describe("Download", func() {
 					})
 
 					It("should propagate the error", func() {
-						Expect(err).To(MatchError(errMessage))
+						Expect(err).To(MatchError(fmt.Sprintf(`Download from URL "http://some/remote/file" failed: %s`, errMessage)))
 					})
 				})
 
@@ -176,6 +201,8 @@ var _ = Describe("Download", func() {
 					)
 
 					BeforeEach(func() {
+						fakeCacheEntry.RetrieveReturns(testFilePath, "", nil)
+
 						fakeHttpResponse.GetStatusCodeReturns(http.StatusOK)
 						fakeHttpResponse.GetBodyReturns(responseBody)
 
@@ -210,6 +237,10 @@ var _ = Describe("Download", func() {
 						Expect(hf).To(Equal(hashFunc))
 					})
 
+					It("should return the file path from the cache entry", func() {
+						Expect(filePath).To(Equal(testFilePath))
+					})
+
 					Context("when trying to store the file in the cache fails", func() {
 						BeforeEach(func() {
 							fakeCacheEntry.StoreReturns(testError)
@@ -217,6 +248,32 @@ var _ = Describe("Download", func() {
 
 						It("should propagate the error", func() {
 							Expect(err).To(MatchError(errMessage))
+						})
+					})
+
+					Context("when retrieving the file path from the cache entry initially returns an empty file path", func() {
+						BeforeEach(func() {
+							fakeCacheEntry.RetrieveReturnsOnCall(0, "", etag, nil)
+						})
+
+						Context("when retrieving the file path from the updated cache entry succeeds", func() {
+							BeforeEach(func() {
+								fakeCacheEntry.RetrieveReturnsOnCall(1, testFilePath, etag, nil)
+							})
+
+							It("should return the file path from the cache entry", func() {
+								Expect(filePath).To(Equal(testFilePath))
+							})
+						})
+
+						Context("when retrieving the file path from the updated cache entry fails", func() {
+							BeforeEach(func() {
+								fakeCacheEntry.RetrieveReturnsOnCall(1, "", etag, testError)
+							})
+
+							It("should propagate the error", func() {
+								Expect(err).To(MatchError(errMessage))
+							})
 						})
 					})
 				})

@@ -106,12 +106,12 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 		return err
 	}
 
-	downloadCache, err := cache.NewCache()
+	downloadCache, err := cache.NewCache(progressWriter)
 	if err != nil {
 		return err
 	}
 	httpHelper := download.NewHttpHelper()
-	downloader, err := download.NewDownloader(downloadCache, httpHelper)
+	downloader, err := download.NewDownloader(downloadCache, httpHelper, progressWriter)
 	if err != nil {
 		return err
 	}

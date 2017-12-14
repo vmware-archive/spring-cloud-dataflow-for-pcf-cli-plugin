@@ -134,14 +134,16 @@ type Downloader interface {
 }
 
 type downloader struct {
-	cache      cache.Cache
-	httpHelper HttpHelper
+	cache          cache.Cache
+	httpHelper     HttpHelper
+	progressWriter io.Writer
 }
 
-func NewDownloader(cache cache.Cache, httpHelper HttpHelper) (*downloader, error) {
+func NewDownloader(cache cache.Cache, httpHelper HttpHelper, progressWriter io.Writer) (*downloader, error) {
 	return &downloader{
-		cache:      cache,
-		httpHelper: httpHelper,
+		cache:          cache,
+		httpHelper:     httpHelper,
+		progressWriter: progressWriter,
 	}, nil
 }
 
@@ -155,20 +157,20 @@ func (d *downloader) DownloadFile(url string, checksum string, hashFunc hash.Has
 
 	getRequest, err := d.httpHelper.CreateHttpRequest(http.MethodGet, url)
 	if err != nil {
-		return downloadedFilePath, fmt.Errorf("CreateHttpRequest for download URL %q failed: %s", url, err)
+		return "", fmt.Errorf("CreateHttpRequest for download URL %q failed: %s", url, err)
 	}
 
 	if cachedEtag != "" {
-		getRequest.SetHeader(ifNoneMatchHeader, cachedEtag)
-
 		if downloadedFilePath == "" {
-			fmt.Printf("File at '%s' has previously been cached but cannot be found on local disk. Downloading again.\n", url)
+			fmt.Fprintf(d.progressWriter, "File at '%s' has previously been cached but cannot be found on local disk. Downloading again.\n", url)
+		} else {
+			getRequest.SetHeader(ifNoneMatchHeader, cachedEtag)
 		}
 	}
 
 	response, err := getRequest.SendRequest()
 	if err != nil {
-		return downloadedFilePath, fmt.Errorf("Download from URL %q failed: %s", url, err)
+		return "", fmt.Errorf("Download from URL %q failed: %s", url, err)
 	}
 
 	if response.GetStatusCode() == http.StatusNotModified {
@@ -176,11 +178,17 @@ func (d *downloader) DownloadFile(url string, checksum string, hashFunc hash.Has
 	}
 
 	if response.GetStatusCode() == http.StatusOK {
-		fmt.Printf("Downloading %s\n", url)
+		fmt.Fprintf(d.progressWriter, "Downloading %s\n", url)
 		newEtagValue := response.GetHeader(etagHeader)
 		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, hashFunc)
+		if err == nil {
+			downloadedFilePath, _, err = cacheEntry.Retrieve()
+			if err != nil {
+				return "", err
+			}
+		}
 		return downloadedFilePath, err
 	}
 
-	return downloadedFilePath, errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
+	return "", errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
 }
