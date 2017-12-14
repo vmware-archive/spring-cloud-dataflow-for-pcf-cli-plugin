@@ -22,7 +22,7 @@ import (
 	"io"
 	"net/http"
 
-	"crypto/sha256"
+	"hash"
 
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 )
@@ -130,7 +130,7 @@ func NewHttpHelper() *httpHelper {
 }
 
 type Downloader interface {
-	DownloadFile(url string, checksum string) (string, error)
+	DownloadFile(url string, checksum string, hashFunc hash.Hash) (string, error)
 }
 
 type downloader struct {
@@ -145,7 +145,7 @@ func NewDownloader(cache cache.Cache, httpHelper HttpHelper) (*downloader, error
 	}, nil
 }
 
-func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
+func (d *downloader) DownloadFile(url string, checksum string, hashFunc hash.Hash) (string, error) {
 	cacheEntry := d.cache.Entry(url)
 
 	downloadedFilePath, cachedEtag, err := cacheEntry.Retrieve()
@@ -155,7 +155,7 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 
 	getRequest, err := d.httpHelper.CreateHttpRequest(http.MethodGet, url)
 	if err != nil {
-		return downloadedFilePath, err
+		return downloadedFilePath, fmt.Errorf("CreateHttpRequest for download URL %q failed: %s", url, err)
 	}
 
 	if cachedEtag != "" {
@@ -168,7 +168,7 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 
 	response, err := getRequest.SendRequest()
 	if err != nil {
-		return downloadedFilePath, err
+		return downloadedFilePath, fmt.Errorf("Download from URL %q failed: %s", url, err)
 	}
 
 	if response.GetStatusCode() == http.StatusNotModified {
@@ -178,7 +178,7 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 	if response.GetStatusCode() == http.StatusOK {
 		fmt.Printf("Downloading %s\n", url)
 		newEtagValue := response.GetHeader(etagHeader)
-		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, sha256.New())
+		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, hashFunc)
 		return downloadedFilePath, err
 	}
 

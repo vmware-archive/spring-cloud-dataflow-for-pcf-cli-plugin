@@ -40,7 +40,12 @@ func RunShell(cmd *exec.Cmd) error {
 		io.Copy(stdin, os.Stdin)
 	}()
 
-	return cmd.Run()
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Launching shell failed: %s", err)
+	}
+
+	return nil
 }
 
 func envVars(keys ...string) []string {

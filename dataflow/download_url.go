@@ -16,9 +16,66 @@
  */
 package dataflow
 
-import "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 
-func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.AuthenticatedClient) (string, string, error) {
-	return "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar",
-		"9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453", nil
+	"crypto/sha256"
+	"hash"
+
+	"crypto/sha1"
+
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
+)
+
+// FIXME: finalise the following struct once the dataflow server feature has been completed.
+// See https://github.com/spring-cloud/spring-cloud-dataflow/issues/1829
+type AboutResp struct {
+	VersionInfo struct {
+		Shell struct {
+			Url                      string
+			ImplementationDependency struct {
+				ChecksumSha1   string
+				ChecksumSha256 string
+			}
+		}
+	}
+}
+
+func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.AuthenticatedClient, accessToken string) (string, string, hash.Hash, error) {
+	defaultHashFunc := sha256.New()
+	bodyReader, statusCode, _, err := authClient.DoAuthenticatedGet(dataflowServer+"/about", accessToken)
+	if err != nil {
+		return "", "", defaultHashFunc, fmt.Errorf("Dataflow server error: %s", err)
+	}
+	if statusCode != http.StatusOK {
+		return "", "", defaultHashFunc, fmt.Errorf("Dataflow server failed: %d", statusCode)
+	}
+	body, err := ioutil.ReadAll(bodyReader)
+	if err != nil {
+		return "", "", defaultHashFunc, fmt.Errorf("Cannot read dataflow server response body: %s", err)
+	}
+
+	var aboutResp AboutResp
+	err = json.Unmarshal(body, &aboutResp)
+	if err != nil {
+		return "", "", defaultHashFunc, fmt.Errorf("Invalid dataflow server response JSON: %s, response body: '%s'", err, string(body))
+	}
+
+	shellInfo := aboutResp.VersionInfo.Shell
+	shellChecksums := shellInfo.ImplementationDependency
+
+	// FIXME: delete this temporary code
+	if shellInfo.Url == "" {
+		shellInfo.Url = "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar"
+		shellChecksums.ChecksumSha256 = "9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453"
+	}
+
+	if shellChecksums.ChecksumSha256 != "" {
+		return shellInfo.Url, shellChecksums.ChecksumSha256, defaultHashFunc, nil
+	}
+
+	return shellInfo.Url, shellChecksums.ChecksumSha1, sha1.New(), nil
 }

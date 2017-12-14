@@ -14,6 +14,9 @@ import (
 
 	"bytes"
 
+	"crypto/sha256"
+	"hash"
+
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/downloadfakes"
 )
@@ -36,6 +39,7 @@ var _ = Describe("Download", func() {
 		fakeHttpHelper   *downloadfakes.FakeHttpHelper
 		fakeHttpRequest  *downloadfakes.FakeHttpRequest
 		fakeHttpResponse *downloadfakes.FakeHttpResponse
+		hashFunc         hash.Hash
 		filePath         string
 		etag             string
 		testError        error
@@ -49,6 +53,7 @@ var _ = Describe("Download", func() {
 		fakeHttpHelper = &downloadfakes.FakeHttpHelper{}
 		fakeHttpRequest = &downloadfakes.FakeHttpRequest{}
 		fakeHttpResponse = &downloadfakes.FakeHttpResponse{}
+		hashFunc = sha256.New()
 		etag = etagValue
 		testError = errors.New(errMessage)
 		url = urlValue
@@ -58,7 +63,7 @@ var _ = Describe("Download", func() {
 
 	Describe("DownloadFile", func() {
 		JustBeforeEach(func() {
-			filePath, err = downloader.DownloadFile(urlValue, checksumValue)
+			filePath, err = downloader.DownloadFile(urlValue, checksumValue, hashFunc)
 		})
 
 		Context("when it is the normal case", func() {
@@ -198,10 +203,11 @@ var _ = Describe("Download", func() {
 					It("should try and store the file in the cache", func() {
 						Expect(fakeCacheEntry.StoreCallCount()).To(Equal(1))
 
-						contentsArg, tagArg, checksumArg, _ := fakeCacheEntry.StoreArgsForCall(0)
+						contentsArg, tagArg, checksumArg, hf := fakeCacheEntry.StoreArgsForCall(0)
 						Expect(contentsArg).To(Equal(responseBody))
 						Expect(tagArg).To(Equal(etagValue))
 						Expect(checksumArg).To(Equal(checksumValue))
+						Expect(hf).To(Equal(hashFunc))
 					})
 
 					Context("when trying to store the file in the cache fails", func() {

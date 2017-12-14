@@ -18,6 +18,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"hash"
 	"net/http"
 	"os"
 
@@ -83,8 +84,8 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 				return "", err
 			}
 
-			return "", downloadAndRunShell(func() (string, string, error) {
-				return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient)
+			return "", downloadAndRunShell(func() (string, string, hash.Hash, error) {
+				return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient, accessToken)
 			}, func(fileName string) *exec.Cmd {
 				return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
 			}, progressWriter)
@@ -95,12 +96,12 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 	}
 }
 
-type urlResolver func() (string, string, error)
+type urlResolver func() (string, string, hash.Hash, error)
 
 type shellCommandFactory func(fileName string) *exec.Cmd
 
 func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommandFactory, progressWriter io.Writer) error {
-	url, checksum, err := shellDownloadUrl()
+	url, checksum, hashFunc, err := shellDownloadUrl()
 	if err != nil {
 		return err
 	}
@@ -115,7 +116,7 @@ func downloadAndRunShell(shellDownloadUrl urlResolver, shellCommand shellCommand
 		return err
 	}
 
-	filePath, err := downloader.DownloadFile(url, checksum)
+	filePath, err := downloader.DownloadFile(url, checksum, hashFunc)
 	if err != nil {
 		return err
 	}
