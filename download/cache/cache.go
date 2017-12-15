@@ -1,7 +1,22 @@
+/*
+ * Copyright (C) 2017-Present Pivotal Software, Inc. All rights reserved.
+ *
+ * This program and the accompanying materials are made available under
+ * the terms of the under the Apache License, Version 2.0 (the "License”);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cache
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +25,6 @@ import (
 	"strings"
 
 	"hash"
-	"io/ioutil"
 )
 
 const (
@@ -32,7 +46,7 @@ type Cache interface {
 
 type fileCache struct {
 	downloadsDirectory string
-	cacheEntriesFile   string
+	etagHelper         EtagHelper
 	progressWriter     io.Writer
 }
 
@@ -40,9 +54,8 @@ func (f *fileCache) Entry(Url string) CacheEntry {
 	return &fileCacheEntry{
 		downloadUrl:        Url,
 		downloadFile:       createFilePathForDownloadFile(Url, f.downloadsDirectory),
-		cacheEntriesFile:   f.cacheEntriesFile,
 		checksumCalculator: &checksumCalculator{},
-		etagHelper:         &etagHelper{},
+		etagHelper:         f.etagHelper,
 		progressWriter:     f.progressWriter,
 	}
 }
@@ -54,16 +67,14 @@ func NewCache(progressWriter io.Writer) (*fileCache, error) {
 	}
 
 	cacheDataFile := path.Join(downloadsDir, cacheEntriesFileName)
-	if !fileExists(cacheDataFile) {
-		_, err := os.OpenFile(cacheDataFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cacheEntriesFilePerm)
-		if err != nil {
-			return nil, err
-		}
+	etagHelper, err := NewEtagIndex(cacheDataFile)
+	if err != nil {
+		return nil, err
 	}
 
 	return &fileCache{
 		downloadsDirectory: downloadsDir,
-		cacheEntriesFile:   cacheDataFile,
+		etagHelper:         etagHelper,
 		progressWriter:     progressWriter,
 	}, nil
 }
@@ -94,55 +105,8 @@ func (c *checksumCalculator) CalculateChecksum(filePath string, hash hash.Hash) 
 // Place etag handling functionality inside an interface to help with testing
 //go:generate counterfeiter -o ../downloadfakes/fake_etaghelper.go . EtagHelper
 type EtagHelper interface {
-	GetETagForUrl(url string, metadataFile string) (string, error)
-	SetEtagForUrl(url string, etag string, cacheEntriesFile string) error
-}
-
-type etagHelper struct {
-}
-
-func (h *etagHelper) GetETagForUrl(url string, metadataFile string) (string, error) {
-	cacheDataFile, err := os.Open(metadataFile)
-	if err != nil {
-		return "", err
-	}
-
-	defer cacheDataFile.Close()
-
-	scanner := bufio.NewScanner(cacheDataFile)
-	for scanner.Scan() {
-		scannedLine := scanner.Text()
-		if strings.HasPrefix(scannedLine, url+" : ") {
-			return strings.Split(scannedLine, " : ")[1], nil
-		}
-	}
-
-	return "", nil
-}
-
-func (h *etagHelper) SetEtagForUrl(url string, etag string, cacheEntriesFile string) error {
-	cacheBytes, err := ioutil.ReadFile(cacheEntriesFile)
-	if err != nil {
-		return err
-	}
-
-	cacheLines := strings.Split(string(cacheBytes), "\n")
-
-	existingEntryFound := false
-	for i, line := range cacheLines {
-		if strings.HasPrefix(line, url+" : ") {
-			cacheLines[i] = url + " : " + etag
-			existingEntryFound = true
-			break
-		}
-	}
-
-	if !existingEntryFound {
-		cacheLines = append(cacheLines, url+" : "+etag)
-	}
-
-	output := strings.Join(cacheLines, "\n")
-	return ioutil.WriteFile(cacheEntriesFile, []byte(output), cacheEntriesFilePerm)
+	GetETagForUrl(url string) (string, error)
+	SetEtagForUrl(url string, etag string) error
 }
 
 // CacheEntry provides a cache of a single file and its etag.
@@ -160,7 +124,6 @@ type CacheEntry interface {
 type fileCacheEntry struct {
 	downloadUrl        string
 	downloadFile       string
-	cacheEntriesFile   string
 	checksumCalculator ChecksumCalculator
 	etagHelper         EtagHelper
 	progressWriter     io.Writer
@@ -173,7 +136,7 @@ func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
 		path = ""
 	}
 
-	etag, err = f.etagHelper.GetETagForUrl(f.downloadUrl, f.cacheEntriesFile)
+	etag, err = f.etagHelper.GetETagForUrl(f.downloadUrl)
 	return path, etag, err
 }
 
@@ -195,7 +158,7 @@ func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum str
 	}
 
 	if etag != "" {
-		err = f.etagHelper.SetEtagForUrl(f.downloadUrl, etag, f.cacheEntriesFile)
+		err = f.etagHelper.SetEtagForUrl(f.downloadUrl, etag)
 		if err != nil {
 			return err
 		}

@@ -8,11 +8,10 @@ import (
 )
 
 type FakeEtagHelper struct {
-	GetETagForUrlStub        func(url string, metadataFile string) (string, error)
+	GetETagForUrlStub        func(url string) (string, error)
 	getETagForUrlMutex       sync.RWMutex
 	getETagForUrlArgsForCall []struct {
-		url          string
-		metadataFile string
+		url string
 	}
 	getETagForUrlReturns struct {
 		result1 string
@@ -22,12 +21,11 @@ type FakeEtagHelper struct {
 		result1 string
 		result2 error
 	}
-	SetEtagForUrlStub        func(url string, etag string, cacheEntriesFile string) error
+	SetEtagForUrlStub        func(url string, etag string) error
 	setEtagForUrlMutex       sync.RWMutex
 	setEtagForUrlArgsForCall []struct {
-		url              string
-		etag             string
-		cacheEntriesFile string
+		url  string
+		etag string
 	}
 	setEtagForUrlReturns struct {
 		result1 error
@@ -39,17 +37,16 @@ type FakeEtagHelper struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeEtagHelper) GetETagForUrl(url string, metadataFile string) (string, error) {
+func (fake *FakeEtagHelper) GetETagForUrl(url string) (string, error) {
 	fake.getETagForUrlMutex.Lock()
 	ret, specificReturn := fake.getETagForUrlReturnsOnCall[len(fake.getETagForUrlArgsForCall)]
 	fake.getETagForUrlArgsForCall = append(fake.getETagForUrlArgsForCall, struct {
-		url          string
-		metadataFile string
-	}{url, metadataFile})
-	fake.recordInvocation("GetETagForUrl", []interface{}{url, metadataFile})
+		url string
+	}{url})
+	fake.recordInvocation("GetETagForUrl", []interface{}{url})
 	fake.getETagForUrlMutex.Unlock()
 	if fake.GetETagForUrlStub != nil {
-		return fake.GetETagForUrlStub(url, metadataFile)
+		return fake.GetETagForUrlStub(url)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -63,10 +60,10 @@ func (fake *FakeEtagHelper) GetETagForUrlCallCount() int {
 	return len(fake.getETagForUrlArgsForCall)
 }
 
-func (fake *FakeEtagHelper) GetETagForUrlArgsForCall(i int) (string, string) {
+func (fake *FakeEtagHelper) GetETagForUrlArgsForCall(i int) string {
 	fake.getETagForUrlMutex.RLock()
 	defer fake.getETagForUrlMutex.RUnlock()
-	return fake.getETagForUrlArgsForCall[i].url, fake.getETagForUrlArgsForCall[i].metadataFile
+	return fake.getETagForUrlArgsForCall[i].url
 }
 
 func (fake *FakeEtagHelper) GetETagForUrlReturns(result1 string, result2 error) {
@@ -91,18 +88,17 @@ func (fake *FakeEtagHelper) GetETagForUrlReturnsOnCall(i int, result1 string, re
 	}{result1, result2}
 }
 
-func (fake *FakeEtagHelper) SetEtagForUrl(url string, etag string, cacheEntriesFile string) error {
+func (fake *FakeEtagHelper) SetEtagForUrl(url string, etag string) error {
 	fake.setEtagForUrlMutex.Lock()
 	ret, specificReturn := fake.setEtagForUrlReturnsOnCall[len(fake.setEtagForUrlArgsForCall)]
 	fake.setEtagForUrlArgsForCall = append(fake.setEtagForUrlArgsForCall, struct {
-		url              string
-		etag             string
-		cacheEntriesFile string
-	}{url, etag, cacheEntriesFile})
-	fake.recordInvocation("SetEtagForUrl", []interface{}{url, etag, cacheEntriesFile})
+		url  string
+		etag string
+	}{url, etag})
+	fake.recordInvocation("SetEtagForUrl", []interface{}{url, etag})
 	fake.setEtagForUrlMutex.Unlock()
 	if fake.SetEtagForUrlStub != nil {
-		return fake.SetEtagForUrlStub(url, etag, cacheEntriesFile)
+		return fake.SetEtagForUrlStub(url, etag)
 	}
 	if specificReturn {
 		return ret.result1
@@ -116,10 +112,10 @@ func (fake *FakeEtagHelper) SetEtagForUrlCallCount() int {
 	return len(fake.setEtagForUrlArgsForCall)
 }
 
-func (fake *FakeEtagHelper) SetEtagForUrlArgsForCall(i int) (string, string, string) {
+func (fake *FakeEtagHelper) SetEtagForUrlArgsForCall(i int) (string, string) {
 	fake.setEtagForUrlMutex.RLock()
 	defer fake.setEtagForUrlMutex.RUnlock()
-	return fake.setEtagForUrlArgsForCall[i].url, fake.setEtagForUrlArgsForCall[i].etag, fake.setEtagForUrlArgsForCall[i].cacheEntriesFile
+	return fake.setEtagForUrlArgsForCall[i].url, fake.setEtagForUrlArgsForCall[i].etag
 }
 
 func (fake *FakeEtagHelper) SetEtagForUrlReturns(result1 error) {

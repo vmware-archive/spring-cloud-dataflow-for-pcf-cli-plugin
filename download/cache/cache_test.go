@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2017-Present Pivotal Software, Inc. All rights reserved.
+ *
+ * This program and the accompanying materials are made available under
+ * the terms of the under the Apache License, Version 2.0 (the "License”);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cache_test
 
 import (
@@ -128,13 +144,9 @@ var _ = Describe("Cache", func() {
 			})
 
 			It("should return a cache entry that has stored the expected path for the cache entries file", func() {
-				if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
-					cacheEntriesFilePath := cacheEntry.GetCacheEntriesFile()
-					Expect(cacheEntriesFilePath).Should(HavePrefix(testCacheUnderCfHomeFolder))
-					Expect(cacheEntriesFilePath).Should(HaveSuffix(".cf/spring-cloud-dataflow-for-pcf/cache/.cachedata"))
-				} else {
-					Fail("cache entry did not implement FieldGetter")
-				}
+				cacheEntriesFilePath := path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache", ".cachedata")
+				_, err := os.Stat(cacheEntriesFilePath)
+				Expect(os.IsNotExist(err)).To(BeFalse())
 			})
 
 			It("should return a cache entry that has stored the expected path for the file to download", func() {
@@ -194,13 +206,9 @@ var _ = Describe("Cache", func() {
 			})
 
 			It("should return a cache entry that has stored the expected path for the cache entries file", func() {
-				if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
-					cacheEntriesFilePath := cacheEntry.GetCacheEntriesFile()
-					Expect(cacheEntriesFilePath).Should(HavePrefix(testCacheUnderHomeFolder))
-					Expect(cacheEntriesFilePath).Should(HaveSuffix(".cf/spring-cloud-dataflow-for-pcf/cache/.cachedata"))
-				} else {
-					Fail("cache entry did not implement FieldGetter")
-				}
+				cacheEntriesFilePath := path.Join(testCacheUnderHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache", ".cachedata")
+				_, err := os.Stat(cacheEntriesFilePath)
+				Expect(os.IsNotExist(err)).To(BeFalse())
 			})
 
 			It("should return a cache entry that has stored the expected path for the file to download", func() {
@@ -289,34 +297,6 @@ var _ = Describe("CacheEntry", func() {
 				Expect(etag).To(Equal(etagValue))
 			})
 
-			Context("when the metadata file cannot be opened", func() {
-				BeforeEach(func() {
-					var etagHelper cache.EtagHelper
-
-					if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
-						etagHelper = cacheEntry.GetEtagHelper()
-					} else {
-						Fail("cache entry did not implement FieldGetter")
-					}
-
-					fakeEtagHelper.GetETagForUrlStub = func(url string, metadataFile string) (string, error) {
-						Expect(os.Remove(metadataFile)).To(Succeed())
-						return etagHelper.GetETagForUrl(url, metadataFile)
-					}
-
-					if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
-						cacheEntry.SetEtagHelper(fakeEtagHelper)
-					} else {
-						Fail("cache entry did not implement FieldSetter")
-					}
-				})
-
-				It("should percolate the error", func() {
-					_, _, err := cacheEntry.Retrieve()
-					Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
-				})
-			})
-
 			Context("when the download content cannot be read", func() {
 				BeforeEach(func() {
 					downloadContent = ioutil.NopCloser(badReader{})
@@ -361,33 +341,6 @@ var _ = Describe("CacheEntry", func() {
 
 				It("should percolate the error", func() {
 					Expect(err).To(MatchError("write error"))
-				})
-			})
-
-			Context("when the cache entries file cannot be read", func() {
-				BeforeEach(func() {
-					var etagHelper cache.EtagHelper
-
-					if cacheEntry, ok := cacheEntry.(cache.FieldGetter); ok {
-						etagHelper = cacheEntry.GetEtagHelper()
-					} else {
-						Fail("cache entry did not implement FieldGetter")
-					}
-
-					fakeEtagHelper.SetEtagForUrlStub = func(url string, etag string, cacheEntriesFile string) error {
-						Expect(os.Remove(cacheEntriesFile)).To(Succeed())
-						return etagHelper.SetEtagForUrl(url, etag, cacheEntriesFile)
-					}
-
-					if cacheEntry, ok := cacheEntry.(cache.FieldSetter); ok {
-						cacheEntry.SetEtagHelper(fakeEtagHelper)
-					} else {
-						Fail("cache entry did not implement FieldSetter")
-					}
-				})
-
-				It("should percolate the error", func() {
-					Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
 				})
 			})
 		})
@@ -447,10 +400,9 @@ var _ = Describe("CacheEntry", func() {
 					It("should set the etag value in the cache entries file", func() {
 						Expect(fakeEtagHelper.SetEtagForUrlCallCount()).To(Equal(1))
 
-						urlArg, etagArg, cacheEntriesFilePath := fakeEtagHelper.SetEtagForUrlArgsForCall(0)
+						urlArg, etagArg := fakeEtagHelper.SetEtagForUrlArgsForCall(0)
 						Expect(urlArg).To(Equal(urlValue))
 						Expect(etagArg).To(Equal(etagValue))
-						Expect(cacheEntriesFilePath).Should(HaveSuffix(".cachedata"))
 					})
 
 					Context("when trying to set the etag value fails with an error", func() {
