@@ -22,7 +22,7 @@ import (
 	"io"
 	"net/http"
 
-	"crypto/sha256"
+	"hash"
 
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 )
@@ -130,22 +130,24 @@ func NewHttpHelper() *httpHelper {
 }
 
 type Downloader interface {
-	DownloadFile(url string, checksum string) (string, error)
+	DownloadFile(url string, checksum string, hashFunc hash.Hash) (string, error)
 }
 
 type downloader struct {
-	cache      cache.Cache
-	httpHelper HttpHelper
+	cache          cache.Cache
+	httpHelper     HttpHelper
+	progressWriter io.Writer
 }
 
-func NewDownloader(cache cache.Cache, httpHelper HttpHelper) (*downloader, error) {
+func NewDownloader(cache cache.Cache, httpHelper HttpHelper, progressWriter io.Writer) (*downloader, error) {
 	return &downloader{
-		cache:      cache,
-		httpHelper: httpHelper,
+		cache:          cache,
+		httpHelper:     httpHelper,
+		progressWriter: progressWriter,
 	}, nil
 }
 
-func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
+func (d *downloader) DownloadFile(url string, checksum string, hashFunc hash.Hash) (string, error) {
 	cacheEntry := d.cache.Entry(url)
 
 	downloadedFilePath, cachedEtag, err := cacheEntry.Retrieve()
@@ -155,20 +157,20 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 
 	getRequest, err := d.httpHelper.CreateHttpRequest(http.MethodGet, url)
 	if err != nil {
-		return downloadedFilePath, err
+		return "", fmt.Errorf("CreateHttpRequest for download URL %q failed: %s", url, err)
 	}
 
 	if cachedEtag != "" {
-		getRequest.SetHeader(ifNoneMatchHeader, cachedEtag)
-
 		if downloadedFilePath == "" {
-			fmt.Printf("File at '%s' has previously been cached but cannot be found on local disk. Downloading again.\n", url)
+			fmt.Fprintf(d.progressWriter, "File at '%s' has previously been cached but cannot be found on local disk. Downloading again.\n", url)
+		} else {
+			getRequest.SetHeader(ifNoneMatchHeader, cachedEtag)
 		}
 	}
 
 	response, err := getRequest.SendRequest()
 	if err != nil {
-		return downloadedFilePath, err
+		return "", fmt.Errorf("Download from URL %q failed: %s", url, err)
 	}
 
 	if response.GetStatusCode() == http.StatusNotModified {
@@ -176,11 +178,17 @@ func (d *downloader) DownloadFile(url string, checksum string) (string, error) {
 	}
 
 	if response.GetStatusCode() == http.StatusOK {
-		fmt.Printf("Downloading %s\n", url)
+		fmt.Fprintf(d.progressWriter, "Downloading %s\n", url)
 		newEtagValue := response.GetHeader(etagHeader)
-		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, sha256.New())
+		err = cacheEntry.Store(response.GetBody(), newEtagValue, checksum, hashFunc)
+		if err == nil {
+			downloadedFilePath, _, err = cacheEntry.Retrieve()
+			if err != nil {
+				return "", err
+			}
+		}
 		return downloadedFilePath, err
 	}
 
-	return downloadedFilePath, errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
+	return "", errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
 }

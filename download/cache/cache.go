@@ -33,6 +33,7 @@ type Cache interface {
 type fileCache struct {
 	downloadsDirectory string
 	cacheEntriesFile   string
+	progressWriter     io.Writer
 }
 
 func (f *fileCache) Entry(Url string) CacheEntry {
@@ -42,10 +43,11 @@ func (f *fileCache) Entry(Url string) CacheEntry {
 		cacheEntriesFile:   f.cacheEntriesFile,
 		checksumCalculator: &checksumCalculator{},
 		etagHelper:         &etagHelper{},
+		progressWriter:     f.progressWriter,
 	}
 }
 
-func NewCache() (*fileCache, error) {
+func NewCache(progressWriter io.Writer) (*fileCache, error) {
 	downloadsDir, err := getDownloadsDirectory()
 	if err != nil {
 		return nil, err
@@ -62,6 +64,7 @@ func NewCache() (*fileCache, error) {
 	return &fileCache{
 		downloadsDirectory: downloadsDir,
 		cacheEntriesFile:   cacheDataFile,
+		progressWriter:     progressWriter,
 	}, nil
 }
 
@@ -160,6 +163,7 @@ type fileCacheEntry struct {
 	cacheEntriesFile   string
 	checksumCalculator ChecksumCalculator
 	etagHelper         EtagHelper
+	progressWriter     io.Writer
 }
 
 func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
@@ -176,13 +180,13 @@ func (f *fileCacheEntry) Retrieve() (path string, etag string, err error) {
 func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum string, hash hash.Hash) error {
 	err := writeDataToNamedFile(contents, f.downloadFile)
 	if err != nil {
-		fmt.Printf("Error downloading %s: %s\n", f.downloadFile, err)
+		fmt.Fprintf(f.progressWriter, "Error downloading %s: %s\n", f.downloadFile, err)
 		return err
 	}
 
 	calculatedCheckSum, err := f.checksumCalculator.CalculateChecksum(f.downloadFile, hash)
 	if err != nil {
-		fmt.Printf("Error calculating checksum of %s: %s\n", f.downloadFile, err)
+		fmt.Fprintf(f.progressWriter, "Error calculating checksum of %s: %s\n", f.downloadFile, err)
 		return err
 	}
 
