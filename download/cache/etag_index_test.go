@@ -89,8 +89,8 @@ var _ = Describe("EtagIndex", func() {
 			Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
 		})
 
-		It("should return an error from GetEtagForUrl", func() {
-			_, err := etagIndex.GetETagForUrl(url1)
+		It("should return an error from SetEtagForUrl", func() {
+			err := etagIndex.SetEtagForUrl(url1, etag1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
 		})

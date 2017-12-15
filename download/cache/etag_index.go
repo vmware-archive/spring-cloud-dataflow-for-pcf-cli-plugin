@@ -17,70 +17,65 @@
 package cache
 
 import (
-	"bufio"
+	"encoding/json"
 	"io/ioutil"
-	"os"
-	"strings"
 )
 
 type etagIndex struct {
 	indexFile string
 }
 
+type IndexMap map[string]string
+
 func NewEtagIndex(indexFile string) (*etagIndex, error) {
+	h := &etagIndex{
+		indexFile: indexFile,
+	}
+
 	if !fileExists(indexFile) {
-		f, err := os.OpenFile(indexFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cacheEntriesFilePerm)
+		err := h.writeIndex(IndexMap{})
 		if err != nil {
 			return nil, err
 		}
-		f.Close()
 	}
 
-	return &etagIndex{
-		indexFile: indexFile,
-	}, nil
+	return h, nil
 }
 
 func (h *etagIndex) GetETagForUrl(url string) (string, error) {
-	cacheDataFile, err := os.Open(h.indexFile)
+	index := IndexMap{}
+	err := h.readIndex(index)
 	if err != nil {
 		return "", err
 	}
-
-	defer cacheDataFile.Close()
-
-	scanner := bufio.NewScanner(cacheDataFile)
-	for scanner.Scan() {
-		scannedLine := scanner.Text()
-		if strings.HasPrefix(scannedLine, url+" : ") {
-			return strings.Split(scannedLine, " : ")[1], nil
-		}
-	}
-
-	return "", nil
+	return index[url], nil
 }
 
 func (h *etagIndex) SetEtagForUrl(url string, etag string) error {
-	cacheBytes, err := ioutil.ReadFile(h.indexFile)
+	index := IndexMap{}
+	err := h.readIndex(index)
 	if err != nil {
 		return err
 	}
 
-	cacheLines := strings.Split(string(cacheBytes), "\n")
+	index[url] = etag
 
-	existingEntryFound := false
-	for i, line := range cacheLines {
-		if strings.HasPrefix(line, url+" : ") {
-			cacheLines[i] = url + " : " + etag
-			existingEntryFound = true
-			break
-		}
+	return h.writeIndex(index)
+}
+
+func (h *etagIndex) writeIndex(index IndexMap) error {
+	bytes, err := json.Marshal(index)
+	if err != nil {
+		return err // Should never get here
+	}
+	return ioutil.WriteFile(h.indexFile, bytes, cacheEntriesFilePerm)
+}
+
+func (h *etagIndex) readIndex(index IndexMap) error {
+	bytes, err := ioutil.ReadFile(h.indexFile)
+	if err != nil {
+		return err
 	}
 
-	if !existingEntryFound {
-		cacheLines = append(cacheLines, url+" : "+etag)
-	}
-
-	output := strings.Join(cacheLines, "\n")
-	return ioutil.WriteFile(h.indexFile, []byte(output), cacheEntriesFilePerm)
+	return json.Unmarshal(bytes, &index)
 }
