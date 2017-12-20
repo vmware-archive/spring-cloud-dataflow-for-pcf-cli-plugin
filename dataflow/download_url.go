@@ -30,16 +30,12 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
 )
 
-// FIXME: finalise the following struct once the dataflow server feature has been completed.
-// See https://github.com/spring-cloud/spring-cloud-dataflow/issues/1829
 type AboutResp struct {
 	VersionInfo struct {
 		Shell struct {
-			Url                      string
-			ImplementationDependency struct {
-				ChecksumSha1   string
-				ChecksumSha256 string
-			}
+			Url            string
+			ChecksumSha1   string
+			ChecksumSha256 string
 		}
 	}
 }
@@ -65,17 +61,16 @@ func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.Authe
 	}
 
 	shellInfo := aboutResp.VersionInfo.Shell
-	shellChecksums := shellInfo.ImplementationDependency
 
 	// FIXME: delete this temporary code
 	if shellInfo.Url == "" {
 		shellInfo.Url = "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar"
-		shellChecksums.ChecksumSha256 = "9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453"
+		shellInfo.ChecksumSha256 = "9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453"
 	}
 
-	if shellChecksums.ChecksumSha256 != "" {
-		return shellInfo.Url, shellChecksums.ChecksumSha256, defaultHashFunc, nil
+	if shellInfo.ChecksumSha256 != "" {
+		return shellInfo.Url, shellInfo.ChecksumSha256, defaultHashFunc, nil
 	}
 
-	return shellInfo.Url, shellChecksums.ChecksumSha1, sha1.New(), nil
+	return shellInfo.Url, shellInfo.ChecksumSha1, sha1.New(), nil
 }

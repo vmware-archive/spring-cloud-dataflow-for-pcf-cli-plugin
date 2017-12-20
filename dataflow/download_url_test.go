@@ -134,9 +134,7 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 			payload = fmt.Sprintf(`
 				{"versionInfo":
 					{"shell":
-						{"implementationDependency":
-							{"checksumSha1": "%s"
-							}
+						{"checksumSha1": "%s"
 						}
 					}
 				}`, testSha1Checksum)
@@ -160,9 +158,7 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 			payload = fmt.Sprintf(`
 				{"versionInfo":
 					{"shell":
-						{"implementationDependency":
-							{"checksumSha256": "%s"
-							}
+						{"checksumSha256": "%s"
 						}
 					}
 				}`, testSha256Checksum)
@@ -186,10 +182,8 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 			payload = fmt.Sprintf(`
 				{"versionInfo":
 					{"shell":
-						{"implementationDependency":
-							{"checksumSha1": "%s",
-							 "checksumSha256": "%s"
-							}
+						{"checksumSha1": "%s",
+						 "checksumSha256": "%s"
 						}
 					}
 				}`, testSha1Checksum, testSha256Checksum)
