@@ -57,18 +57,18 @@ func ServiceInstanceURL(cliConnection plugin.CliConnection, serviceInstanceName 
 	_, statusCode, header, err := authClient.DoAuthenticatedGet(parsedUrl.String(), accessToken)
 	if statusCode != http.StatusFound {
 		if err != nil {
-			return "", fmt.Errorf("dataflow service broker failed: %s", err)
+			return "", fmt.Errorf("service broker failed: %s", err)
 		}
-		return "", fmt.Errorf("dataflow service broker did not return expected response (302): %d", statusCode)
+		return "", fmt.Errorf("service broker did not return expected response (302): %d", statusCode)
 	}
 
 	locationHeader, locationPresent := header["Location"]
 	if !locationPresent {
-		return "", errors.New("dataflow service broker did not return a location header")
+		return "", errors.New("service broker did not return a location header")
 	}
 
 	if len(locationHeader) != 1 {
-		return "", fmt.Errorf("dataflow service broker returned a location header of the wrong length (%d)", len(locationHeader))
+		return "", fmt.Errorf("service broker returned a location header of the wrong length (%d)", len(locationHeader))
 	}
 
 	return locationHeader[0], nil

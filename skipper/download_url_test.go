@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dataflow_test
+package skipper_test
 
 import (
-	. "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
+	. "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/skipper"
 
 	"bytes"
 	"io/ioutil"
@@ -39,12 +39,12 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient/httpclientfakes"
 )
 
-var _ = Describe("DataflowShellDownloadUrl", func() {
+var _ = Describe("SkipperShellDownloadUrl", func() {
 	const (
-		dataflowServerUrl  = "https://data.flow.server"
-		dataflowShellUrl   = "https://data.flow.shell"
+		skipperServerUrl   = "https://skipper.server"
+		skipperShellUrl    = "https://skipper.shell"
 		testAccessToken    = "someaccesstoken"
-		errMessage         = "Apparently failure was an option after all."
+		errMessage         = "It's just fake. It's fake. It's made-up stuff."
 		testSha1Checksum   = "cf23df2207d99a74fbe169e3eba035e633b65d94"
 		testSha256Checksum = "9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453"
 	)
@@ -70,13 +70,13 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 
 	JustBeforeEach(func() {
 		fakeAuthClient.DoAuthenticatedGetReturns(ioutil.NopCloser(bytes.NewBufferString(payload)), getStatus, http.Header{}, getErr)
-		downloadUrl, checksum, hashFunc, err = DataflowShellDownloadUrl(dataflowServerUrl, fakeAuthClient, testAccessToken)
+		downloadUrl, checksum, hashFunc, err = SkipperShellDownloadUrl(skipperServerUrl, fakeAuthClient, testAccessToken)
 	})
 
 	It("should drive the /about endpoint with the supplied access token", func() {
 		Expect(fakeAuthClient.DoAuthenticatedGetCallCount()).To(Equal(1))
 		aboutUrl, accessToken := fakeAuthClient.DoAuthenticatedGetArgsForCall(0)
-		Expect(aboutUrl).To(Equal(dataflowServerUrl + "/about"))
+		Expect(aboutUrl).To(Equal(skipperServerUrl + "/about"))
 		Expect(accessToken).To(Equal(testAccessToken))
 	})
 
@@ -105,12 +105,12 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 	Context("when the /about endpoint returns a response reader which cannot be read", func() {
 		JustBeforeEach(func() {
 			fakeAuthClient.DoAuthenticatedGetReturns(ioutil.NopCloser(badReader{}), getStatus, http.Header{}, getErr)
-			downloadUrl, checksum, hashFunc, err = DataflowShellDownloadUrl(dataflowServerUrl, fakeAuthClient, testAccessToken)
+			downloadUrl, checksum, hashFunc, err = SkipperShellDownloadUrl(skipperServerUrl, fakeAuthClient, testAccessToken)
 		})
 
 		It("should return a suitable error", func() {
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("Cannot read dataflow server response body: read error"))
+			Expect(err).To(MatchError("Cannot read Skipper server response body: read error"))
 		})
 	})
 
@@ -121,7 +121,7 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 
 		It("should return a suitable error", func() {
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("Invalid dataflow server response JSON: unexpected end of JSON input, response body: '{'"))
+			Expect(err).To(MatchError("Invalid Skipper server response JSON: unexpected end of JSON input, response body: '{'"))
 		})
 	})
 
@@ -133,7 +133,7 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 						{"url": "%s"
 						}
 					}
-				}`, dataflowShellUrl)
+				}`, skipperShellUrl)
 		})
 
 		It("should succeed", func() {
@@ -141,7 +141,7 @@ var _ = Describe("DataflowShellDownloadUrl", func() {
 		})
 
 		It("should return the shell download URL", func() {
-			Expect(downloadUrl).To(Equal(dataflowShellUrl))
+			Expect(downloadUrl).To(Equal(skipperShellUrl))
 		})
 	})
 

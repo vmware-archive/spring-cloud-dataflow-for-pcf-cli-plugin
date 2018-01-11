@@ -17,7 +17,6 @@
 package download
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -190,5 +189,5 @@ func (d *downloader) DownloadFile(url string, checksum string, hashFunc hash.Has
 		return downloadedFilePath, err
 	}
 
-	return "", errors.New(fmt.Sprintf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url))
+	return "", fmt.Errorf("Unexpected response '%d' downloading from '%s'", response.GetStatusCode(), url)
 }

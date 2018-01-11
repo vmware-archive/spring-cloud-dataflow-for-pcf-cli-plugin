@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-Present Pivotal Software, Inc. All rights reserved.
+ * Copyright (C) 2018-Present Pivotal Software, Inc. All rights reserved.
  *
  * This program and the accompanying materials are made available under
  * the terms of the under the Apache License, Version 2.0 (the "License”);
@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dataflow_test
+package skipper_test
 
 import (
-	. "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
+	. "github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/skipper"
 
 	"os/exec"
 
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DataflowShellCommand", func() {
+var _ = Describe("SkipperShellCommand", func() {
 	const (
 		fileName = "filename"
 		url      = "https://some.host/path"
@@ -37,7 +37,7 @@ var _ = Describe("DataflowShellCommand", func() {
 	)
 
 	JustBeforeEach(func() {
-		cmd = DataflowShellCommand(fileName, url, skipSslValidation)
+		cmd = SkipperShellCommand(fileName, url, skipSslValidation)
 	})
 
 	Context("when SSL validation is to be performed", func() {
@@ -46,7 +46,7 @@ var _ = Describe("DataflowShellCommand", func() {
 		})
 
 		It("should produce the correct command", func() {
-			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token"}))
+			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--spring.cloud.skipper.client.serverUri=" + url, "--spring.cloud.skipper.client.credentials-provider-command=cf oauth-token"}))
 		})
 	})
 
@@ -56,7 +56,8 @@ var _ = Describe("DataflowShellCommand", func() {
 		})
 
 		It("should produce the correct command", func() {
-			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token", "--dataflow.skip-ssl-validation=true"}))
+			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--spring.cloud.skipper.client.serverUri=" + url, "--spring.cloud.skipper.client.credentials-provider-command=cf oauth-token",
+				"--spring.cloud.skipper.client.skip-ssl-validation=true"}))
 		})
 	})
 

@@ -4,14 +4,14 @@ if [ ! -z ${DEBUG} ]; then
     set -x
 fi
 
-declare -a SCS_COMMANDS=("dataflow-shell")
+declare -a SCS_COMMANDS=("dataflow-shell" "skipper-shell")
 CMD_DOC_FILENAME=cli.md
 
-echo "# Spring Cloud Services CF CLI Plugin Docs
+echo "# Spring Cloud Dataflow for PCF CF CLI Plugin Docs
 
-The following commands can be executed using the Spring Cloud Services [Cloud Foundry CLI](https://github.com/cloudfoundry/cli) Plugin.
+The following commands can be executed using the Spring Cloud Dataflow for PCF [Cloud Foundry CLI](https://github.com/cloudfoundry/cli) Plugin.
 
-# Spring Cloud Services CLI Docs
+# Spring Cloud Dataflow for PCF CLI Docs
 
 " > $CMD_DOC_FILENAME
 

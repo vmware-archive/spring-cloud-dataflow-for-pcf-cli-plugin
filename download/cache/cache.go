@@ -17,7 +17,6 @@
 package cache
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -154,7 +153,7 @@ func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum str
 	}
 
 	if checksum != calculatedCheckSum {
-		return errors.New(fmt.Sprintf("Downloaded file '%s' checksum does not match supplied value", f.downloadFile))
+		return fmt.Errorf("Downloaded file '%s' checksum does not match supplied value", f.downloadFile)
 	}
 
 	if etag != "" {

@@ -105,58 +105,58 @@ var _ = Describe("ServiceInstanceURL", func() {
 			}, nil)
 		})
 
-		It("should issue a get to the dataflow broker", func() {
+		It("should issue a get to the broker", func() {
 			Expect(authClient.DoAuthenticatedGetCallCount()).To(Equal(1))
 			url, token := authClient.DoAuthenticatedGetArgsForCall(0)
 			Expect(url).To(Equal("https://spring-cloud-broker.some.host.name/instances/guid"))
 			Expect(token).To(Equal(accessToken))
 		})
 
-		Context("when the dataflow broker cannot be contacted", func() {
+		Context("when the broker cannot be contacted", func() {
 			BeforeEach(func() {
 				authClient.DoAuthenticatedGetReturns(nil, http.StatusBadGateway, http.Header{}, testError)
 			})
 
 			It("should return a suitable error", func() {
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("dataflow service broker failed: " + errMessage))
+				Expect(err).To(MatchError("service broker failed: " + errMessage))
 			})
 		})
 
-		Context("when the dataflow broker returns status ok", func() {
+		Context("when the broker returns status ok", func() {
 			BeforeEach(func() {
 				authClient.DoAuthenticatedGetReturns(nil, http.StatusOK, http.Header{}, nil)
 			})
 
 			It("should return a suitable error", func() {
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("dataflow service broker did not return expected response (302): 200"))
+				Expect(err).To(MatchError("service broker did not return expected response (302): 200"))
 			})
 		})
 
-		Context("when the dataflow broker returns a redirect without a location header", func() {
+		Context("when the broker returns a redirect without a location header", func() {
 			BeforeEach(func() {
 				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{}, nil)
 			})
 
 			It("should return a suitable error", func() {
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("dataflow service broker did not return a location header"))
+				Expect(err).To(MatchError("service broker did not return a location header"))
 			})
 		})
 
-		Context("when the dataflow broker returns a redirect with a location header with the wrong number of items", func() {
+		Context("when the broker returns a redirect with a location header with the wrong number of items", func() {
 			BeforeEach(func() {
 				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{"Location": []string{}}, nil)
 			})
 
 			It("should return a suitable error", func() {
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("dataflow service broker returned a location header of the wrong length (0)"))
+				Expect(err).To(MatchError("service broker returned a location header of the wrong length (0)"))
 			})
 		})
 
-		Context("when the dataflow broker returns a redirect with a location header with one item", func() {
+		Context("when the broker returns a redirect with a location header with one item", func() {
 			BeforeEach(func() {
 				authClient.DoAuthenticatedGetReturns(nil, http.StatusFound, http.Header{"Location": []string{"https://dataflow-server-url"}}, nil)
 			})
@@ -168,15 +168,3 @@ var _ = Describe("ServiceInstanceURL", func() {
 		})
 	})
 })
-
-type badReader struct {
-	readErr error
-}
-
-func (br *badReader) Read(p []byte) (n int, err error) {
-	return 0, br.readErr
-}
-
-func (*badReader) Close() error {
-	return nil
-}
