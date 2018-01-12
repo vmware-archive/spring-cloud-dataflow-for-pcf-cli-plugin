@@ -62,12 +62,6 @@ func DataflowShellDownloadUrl(dataflowServer string, authClient httpclient.Authe
 
 	shellInfo := aboutResp.VersionInfo.Shell
 
-	// FIXME: delete this temporary code
-	if shellInfo.Url == "" {
-		shellInfo.Url = "https://repo.spring.io/libs-snapshot/org/springframework/cloud/spring-cloud-dataflow-shell/1.2.3.RELEASE/spring-cloud-dataflow-shell-1.2.3.RELEASE.jar"
-		shellInfo.ChecksumSha256 = "9dec3eab5740cb087d7842bcb6bf924f9e008638dedeca16c5336bbc3c0e4453"
-	}
-
 	if shellInfo.ChecksumSha256 != "" {
 		return shellInfo.Url, shellInfo.ChecksumSha256, defaultHashFunc, nil
 	}
