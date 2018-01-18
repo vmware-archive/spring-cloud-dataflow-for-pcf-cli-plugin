@@ -53,6 +53,7 @@ var _ = Describe("Authclient", func() {
 		testErr    error
 		err        error
 		status     int
+		header     http.Header
 	)
 
 	BeforeEach(func() {
@@ -62,19 +63,22 @@ var _ = Describe("Authclient", func() {
 
 	Describe("DoAuthenticatedGet", func() {
 		var (
-			body io.ReadCloser
+			body       io.ReadCloser
+			testHeader http.Header
 		)
 
 		BeforeEach(func() {
 			URL = testUrl
 			resp := &http.Response{StatusCode: http.StatusOK}
 			resp.Body = ioutil.NopCloser(strings.NewReader("payload"))
+			testHeader = http.Header{"header": []string{"value"}}
+			resp.Header = testHeader
 			fakeClient.DoReturns(resp, nil)
 		})
 
 		JustBeforeEach(func() {
 			authClient := httpclient.NewAuthenticatedClient(fakeClient)
-			body, status, err = authClient.DoAuthenticatedGet(URL, testAccessToken)
+			body, status, header, err = authClient.DoAuthenticatedGet(URL, testAccessToken)
 		})
 
 		Context("when the underlying request cannot be created", func() {
@@ -107,6 +111,10 @@ var _ = Describe("Authclient", func() {
 			Expect(string(op)).Should(Equal("payload"))
 		})
 
+		It("should return the response header", func() {
+			Expect(header).To(Equal(testHeader))
+		})
+
 		Context("when the request fails", func() {
 			BeforeEach(func() {
 				fakeClient.DoReturns(nil, testErr)
@@ -121,12 +129,17 @@ var _ = Describe("Authclient", func() {
 		Context("when the request returns a bad status", func() {
 			BeforeEach(func() {
 				resp := &http.Response{StatusCode: http.StatusNotFound, Status: "404 Not found"}
+				resp.Header = testHeader
 				fakeClient.DoReturns(resp, nil)
 			})
 
 			It("should return the error", func() {
 				Expect(body).To(BeNil())
 				Expect(err).To(MatchError("Authenticated get of 'https://eureka.pivotal.io/auth/request' failed: 404 Not found"))
+			})
+
+			It("should return the response header", func() {
+				Expect(header).To(Equal(testHeader))
 			})
 		})
 	})

@@ -18,14 +18,26 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"hash"
 	"net/http"
 	"os"
 
+	"os/exec"
+
+	"io"
+
 	"code.cloudfoundry.org/cli/plugin"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cfutil"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/cli"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/dataflow"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/download/cache"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/format"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/httpclient"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/java"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/serviceutil"
+	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/skipper"
 )
 
 // Plugin version. Substitute "<major>.<minor>.<build>" at build time, e.g. using -ldflags='-X main.pluginVersion=1.2.3'
@@ -46,7 +58,12 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSslValidation},
 	}
-	client := &http.Client{Transport: tr}
+	client := &http.Client{
+		Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse // avoid following redirects
+		},
+	}
 	authClient := httpclient.NewAuthenticatedClient(client)
 
 	argsConsumer := cli.NewArgConsumer(args, diagnoseWithHelp)
@@ -54,23 +71,100 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 	switch args[0] {
 
 	case "dataflow-shell":
-		configServerInstanceName := getDataflowServerInstanceName(argsConsumer)
-		_ = configServerInstanceName
-		_ = authClient
+		dataflowSIName := getDataflowServerInstanceName(argsConsumer)
+
+		runAction(argsConsumer, cliConnection, fmt.Sprintf("Attaching shell to dataflow service %s", format.Bold(format.Cyan(dataflowSIName))), func(progressWriter io.Writer) (string, error) {
+			argsConsumer.CheckAllConsumed()
+			accessToken, err := cfutil.GetToken(cliConnection)
+			if err != nil {
+				return "", err
+			}
+
+			dataflowServer, err := serviceutil.ServiceInstanceURL(cliConnection, dataflowSIName, accessToken, authClient)
+			if err != nil {
+				return "", err
+			}
+
+			return "", downloadAndRunShell("dataflow", func() (string, string, hash.Hash, error) {
+				return dataflow.DataflowShellDownloadUrl(dataflowServer, authClient, accessToken)
+			}, func(fileName string) *exec.Cmd {
+				return dataflow.DataflowShellCommand(fileName, dataflowServer, skipSslValidation)
+			}, progressWriter)
+		})
+
+	case "skipper-shell":
+		skipperSIName := getSkipperServerInstanceName(argsConsumer)
+
+		runAction(argsConsumer, cliConnection, fmt.Sprintf("Attaching Skipper shell to Skipper service %s", format.Bold(format.Cyan(skipperSIName))), func(progressWriter io.Writer) (string, error) {
+			argsConsumer.CheckAllConsumed()
+			accessToken, err := cfutil.GetToken(cliConnection)
+			if err != nil {
+				return "", err
+			}
+
+			skipperServer, err := serviceutil.ServiceInstanceURL(cliConnection, skipperSIName, accessToken, authClient)
+			if err != nil {
+				return "", err
+			}
+
+			return "", downloadAndRunShell("Skipper", func() (string, string, hash.Hash, error) {
+				return skipper.SkipperShellDownloadUrl(skipperServer, authClient, accessToken)
+			}, func(fileName string) *exec.Cmd {
+				return skipper.SkipperShellCommand(fileName, skipperServer, skipSslValidation)
+			}, progressWriter)
+		})
 
 	default:
 		os.Exit(0) // Ignore CLI-MESSAGE-UNINSTALL etc.
 	}
 }
 
+type urlResolver func() (string, string, hash.Hash, error)
+
+type shellCommandFactory func(fileName string) *exec.Cmd
+
+func downloadAndRunShell(shellType string, shellDownloadUrl urlResolver, shellCommand shellCommandFactory, progressWriter io.Writer) error {
+	url, checksum, hashFunc, err := shellDownloadUrl()
+	if err != nil {
+		return err
+	}
+
+	downloadCache, err := cache.NewCache(progressWriter)
+	if err != nil {
+		return err
+	}
+	httpHelper := download.NewHttpHelper()
+	downloader, err := download.NewDownloader(downloadCache, httpHelper, progressWriter)
+	if err != nil {
+		return err
+	}
+
+	filePath, err := downloader.DownloadFile(url, checksum, hashFunc)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(progressWriter, "Launching %s shell JAR\n", shellType)
+	err = java.RunShell(shellCommand(filePath))
+	if err != nil {
+		fmt.Fprintf(progressWriter, "Launching %s shell JAR failed. Checking Java installation\n", shellType)
+		checkErr := java.Check(progressWriter, err)
+		if checkErr != nil {
+			return fmt.Errorf("Java is needed. Please install a JRE or JDK and try again. Details: %s", checkErr.Error())
+		}
+		fmt.Fprintf(progressWriter, "Java installation appears to be ok. Any error messages above may indicate why launching %s shell JAR failed.\n", shellType)
+
+	}
+	return err
+}
+
 func getDataflowServerInstanceName(ac *cli.ArgConsumer) string {
-	return ac.Consume(1, "dataflow server instance name")
+	return ac.Consume(1, "dataflow server service instance name")
 }
 
-func getServiceInstanceName(ac *cli.ArgConsumer) string {
-	return ac.Consume(1, "service instance name")
+func getSkipperServerInstanceName(ac *cli.ArgConsumer) string {
+	return ac.Consume(1, "Skipper server service instance name")
 }
-
 
 func diagnoseWithHelp(message string, command string) {
 	fmt.Printf("%s See 'cf help %s'.\n", message, command)
@@ -101,7 +195,15 @@ func (c *Plugin) GetMetadata() plugin.PluginMetadata {
 				HelpText: "Open a dataflow shell to a Spring Cloud Dataflow for PCF dataflow server",
 				Alias:    "dfsh",
 				UsageDetails: plugin.Usage{
-					Usage: "   cf dataflow-shell DATAFLOW_SERVER_INSTANCE_NAME",
+					Usage: "   cf dataflow-shell DATAFLOW_SERVER_SERVICE_INSTANCE_NAME",
+				},
+			},
+			{
+				Name:     "skipper-shell",
+				HelpText: "Open a Skipper shell to a Spring Cloud Dataflow for PCF Skipper server",
+				Alias:    "sksh",
+				UsageDetails: plugin.Usage{
+					Usage: "   cf skipper-shell SKIPPER_SERVER_SERVICE_INSTANCE_NAME",
 				},
 			},
 		},
@@ -116,4 +218,12 @@ func main() {
 		os.Exit(0)
 	}
 	plugin.Start(new(Plugin))
+}
+
+func runAction(argsConsumer *cli.ArgConsumer, cliConnection plugin.CliConnection, message string, action func(progressWriter io.Writer) (string, error)) {
+	argsConsumer.CheckAllConsumed()
+
+	format.RunAction(cliConnection, message, action, os.Stdout, func() {
+		os.Exit(1)
+	})
 }
