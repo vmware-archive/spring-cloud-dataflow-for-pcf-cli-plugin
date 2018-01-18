@@ -153,7 +153,7 @@ func (f *fileCacheEntry) Store(contents io.ReadCloser, etag string, checksum str
 	}
 
 	if checksum != calculatedCheckSum {
-		return fmt.Errorf("Downloaded file '%s' checksum does not match supplied value", f.downloadFile)
+		return fmt.Errorf("Downloaded file '%s' checksum does not match supplied value '%s'", f.downloadFile, checksum)
 	}
 
 	if etag != "" {

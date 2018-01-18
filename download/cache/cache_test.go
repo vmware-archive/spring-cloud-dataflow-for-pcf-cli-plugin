@@ -392,7 +392,7 @@ var _ = Describe("CacheEntry", func() {
 					})
 
 					It("should raise an error", func() {
-						Expect(err).To(MatchError(fmt.Sprintf("Downloaded file '%s' checksum does not match supplied value", downloadFilePath)))
+						Expect(err).To(MatchError(fmt.Sprintf("Downloaded file '%s' checksum does not match supplied value '%s'", downloadFilePath, checksumValue)))
 					})
 				})
 
