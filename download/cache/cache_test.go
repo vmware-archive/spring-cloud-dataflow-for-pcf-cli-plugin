@@ -110,21 +110,19 @@ var _ = Describe("Cache", func() {
 		})
 
 		Context("when the cache data file cannot be created", func() {
-			var downloadsDir string
+			var cacheDataFile string
 
 			BeforeEach(func() {
-				downloadsParentDir := path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf")
-				Expect(os.MkdirAll(downloadsParentDir, 0755)).To(Succeed())
-				downloadsDir = path.Join(downloadsParentDir, "cache")
-				Expect(os.RemoveAll(downloadsDir)).To(Succeed())
-				Expect(os.Mkdir(downloadsDir, 0555)).To(Succeed())
+				cacheDataFile = path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache", ".cachedata")
+				Expect(os.MkdirAll(cacheDataFile, 0755)).To(Succeed())
 			})
 
 			AfterEach(func() {
-				Expect(os.Remove(downloadsDir)).To(Succeed())
+				Expect(os.Remove(cacheDataFile)).To(Succeed())
 			})
 
 			It("should propagate the error", func() {
+				Expect(err).To(HaveOccurred())
 				Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
 			})
 		})
@@ -428,25 +426,21 @@ var _ = Describe("CacheEntry", func() {
 			})
 
 			Context("when it is not possible to create the download file", func() {
+				var downloadFileUrl string
+
 				BeforeEach(func() {
-					// make the cache entries directory read only
-					permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0444)
-					if permChangeErr != nil {
-						Fail("Unable to make test directory read-only to simulate error situation")
-					}
+					downloadFileUrl = path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache", "file.extension")
+					os.RemoveAll(downloadFileUrl)
+					Expect(os.Mkdir(downloadFileUrl, 0755)).To(Succeed())
 				})
 
 				It("should propagate the error", func() {
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).Should(HaveSuffix("permission denied"))
+					Expect(err.Error()).Should(HaveSuffix("is a directory"))
 				})
 
 				AfterEach(func() {
-					// make the cache entries directory writable once again
-					permChangeErr := os.Chmod(path.Join(testCacheUnderCfHomeFolder, ".cf", "spring-cloud-dataflow-for-pcf", "cache"), 0755)
-					if permChangeErr != nil {
-						Fail("Unable to make test directory writable")
-					}
+					Expect(os.RemoveAll(downloadFileUrl)).To(Succeed())
 				})
 			})
 		})

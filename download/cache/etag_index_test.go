@@ -96,4 +96,16 @@ var _ = Describe("EtagIndex", func() {
 		})
 	})
 
+	Context("when the underlying file turns out to be a directory", func() {
+		BeforeEach(func() {
+			Expect(os.Remove(indexFile)).To(Succeed())
+			Expect(os.MkdirAll(indexFile, 0755)).To(Succeed())
+		})
+
+		It("should return an error from NewEtagIndex", func() {
+			_, err = cache.NewEtagIndex(indexFile)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&os.PathError{}))
+		})
+	})
 })
