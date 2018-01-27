@@ -20,7 +20,7 @@ import "os/exec"
 
 func DataflowShellCommand(fileName string, dataflowServerUrl string, skipSslValidation bool) *exec.Cmd {
 	cmd := exec.Command("java", "-jar", fileName, "--dataflow.uri="+dataflowServerUrl,
-		"--dataflow.credentials-provider-command=cf oauth-token")
+		"--dataflow.credentials-provider-command=cf oauth-token", "--dataflow.mode=skipper")
 	if skipSslValidation {
 		cmd.Args = append(cmd.Args, "--dataflow.skip-ssl-validation=true")
 	}

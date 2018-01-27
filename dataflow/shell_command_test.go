@@ -46,7 +46,7 @@ var _ = Describe("DataflowShellCommand", func() {
 		})
 
 		It("should produce the correct command", func() {
-			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token"}))
+			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token", "--dataflow.mode=skipper"}))
 		})
 	})
 
@@ -56,7 +56,7 @@ var _ = Describe("DataflowShellCommand", func() {
 		})
 
 		It("should produce the correct command", func() {
-			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token", "--dataflow.skip-ssl-validation=true"}))
+			Expect(cmd.Args).To(Equal([]string{"java", "-jar", fileName, "--dataflow.uri=" + url, "--dataflow.credentials-provider-command=cf oauth-token", "--dataflow.mode=skipper", "--dataflow.skip-ssl-validation=true"}))
 		})
 	})
 
