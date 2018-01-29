@@ -37,7 +37,6 @@ import (
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/java"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/pluginutil"
 	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/serviceutil"
-	"github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin/skipper"
 )
 
 // Plugin version. Substitute "<major>.<minor>.<build>" at build time, e.g. using -ldflags='-X main.pluginVersion=1.2.3'
@@ -92,27 +91,27 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 			}, progressWriter)
 		})
 
-	case "skipper-shell":
-		skipperSIName := getSkipperServerInstanceName(argsConsumer)
+	// case "skipper-shell":
+	// 	skipperSIName := getSkipperServerInstanceName(argsConsumer)
 
-		runAction(argsConsumer, cliConnection, fmt.Sprintf("Attaching Skipper shell to Skipper service %s", format.Bold(format.Cyan(skipperSIName))), func(progressWriter io.Writer) (string, error) {
-			argsConsumer.CheckAllConsumed()
-			accessToken, err := cfutil.GetToken(cliConnection)
-			if err != nil {
-				return "", err
-			}
+	// 	runAction(argsConsumer, cliConnection, fmt.Sprintf("Attaching Skipper shell to Skipper service %s", format.Bold(format.Cyan(skipperSIName))), func(progressWriter io.Writer) (string, error) {
+	// 		argsConsumer.CheckAllConsumed()
+	// 		accessToken, err := cfutil.GetToken(cliConnection)
+	// 		if err != nil {
+	// 			return "", err
+	// 		}
 
-			skipperServer, err := serviceutil.ServiceInstanceURL(cliConnection, skipperSIName, accessToken, authClient)
-			if err != nil {
-				return "", err
-			}
+	// 		skipperServer, err := serviceutil.ServiceInstanceURL(cliConnection, skipperSIName, accessToken, authClient)
+	// 		if err != nil {
+	// 			return "", err
+	// 		}
 
-			return "", downloadAndRunShell("Skipper", func() (string, string, hash.Hash, error) {
-				return skipper.SkipperShellDownloadUrl(skipperServer, authClient, accessToken)
-			}, func(fileName string) *exec.Cmd {
-				return skipper.SkipperShellCommand(fileName, skipperServer, skipSslValidation)
-			}, progressWriter)
-		})
+	// 		return "", downloadAndRunShell("Skipper", func() (string, string, hash.Hash, error) {
+	// 			return skipper.SkipperShellDownloadUrl(skipperServer, authClient, accessToken)
+	// 		}, func(fileName string) *exec.Cmd {
+	// 			return skipper.SkipperShellCommand(fileName, skipperServer, skipSslValidation)
+	// 		}, progressWriter)
+	// 	})
 
 	default:
 		os.Exit(0) // Ignore CLI-MESSAGE-UNINSTALL etc.
@@ -198,14 +197,14 @@ func (c *Plugin) GetMetadata() plugin.PluginMetadata {
 					Usage: "   cf dataflow-shell DATAFLOW_SERVER_SERVICE_INSTANCE_NAME",
 				},
 			},
-			{
-				Name:     "skipper-shell",
-				HelpText: "Open a Skipper shell to a Spring Cloud Dataflow for PCF Skipper server",
-				Alias:    "sksh",
-				UsageDetails: plugin.Usage{
-					Usage: "   cf skipper-shell SKIPPER_SERVER_SERVICE_INSTANCE_NAME",
-				},
-			},
+			// {
+			// 	Name:     "skipper-shell",
+			// 	HelpText: "Open a Skipper shell to a Spring Cloud Dataflow for PCF Skipper server",
+			// 	Alias:    "sksh",
+			// 	UsageDetails: plugin.Usage{
+			// 		Usage: "   cf skipper-shell SKIPPER_SERVER_SERVICE_INSTANCE_NAME",
+			// 	},
+			// },
 		},
 	}
 }
