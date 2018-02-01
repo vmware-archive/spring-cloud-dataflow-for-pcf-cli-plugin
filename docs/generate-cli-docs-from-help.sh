@@ -4,7 +4,7 @@ if [ ! -z ${DEBUG} ]; then
     set -x
 fi
 
-declare -a SCS_COMMANDS=("dataflow-shell" "skipper-shell")
+declare -a SCS_COMMANDS=("dataflow-shell")
 CMD_DOC_FILENAME=cli.md
 
 echo "# Spring Cloud Dataflow for PCF CF CLI Plugin Docs

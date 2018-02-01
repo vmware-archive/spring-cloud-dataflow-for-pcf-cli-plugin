@@ -19,17 +19,3 @@ ALIAS:
 ```
 
 
-## `cf skipper-shell`
-
-```
-NAME:
-   skipper-shell - Open a Skipper shell to a Spring Cloud Dataflow for PCF Skipper server
-
-USAGE:
-      cf skipper-shell SKIPPER_SERVER_SERVICE_INSTANCE_NAME
-
-ALIAS:
-   sksh
-```
-
-
