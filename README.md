@@ -27,6 +27,14 @@ Plugin version: 0.0.8
 
 ## Installing
 
+### From CF Community
+
+To install the plugin from the Cloud Foundry Community Plugins, run the following command:
+
+`cf install-plugin -r CF-Community "spring-cloud-dataflow-for-pcf"`
+
+### From Manual Build
+
 To install the plugin in the `cf` CLI, first build it and then issue:
 ```bash
 $ cf install-plugin -f $GOPATH/bin/spring-cloud-dataflow-for-pcf-cli-plugin
