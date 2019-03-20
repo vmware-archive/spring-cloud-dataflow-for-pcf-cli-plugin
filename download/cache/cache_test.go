@@ -43,7 +43,7 @@ const (
 	cfHomeProperty = "CF_HOME"
 	homeProperty   = "HOME"
 	errMessage     = "worse things happen at sea"
-	urlValue       = "http://host/path/file.extension"
+	urlValue       = "https://host/path/file.extension"
 )
 
 var (

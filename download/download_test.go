@@ -42,7 +42,7 @@ const (
 	ifNoneMatchHeader = "If-None-Match"
 	etagHeader        = "ETag"
 	etagValue         = "etag"
-	urlValue          = "http://some/remote/file"
+	urlValue          = "https://some/remote/file"
 	checksumValue     = "checksum"
 	testFilePath      = "/some/path"
 )
@@ -129,7 +129,7 @@ var _ = Describe("Download", func() {
 					})
 
 					It("should propagate the error", func() {
-						Expect(err).To(MatchError(fmt.Sprintf(`CreateHttpRequest for download URL "http://some/remote/file" failed: %s`, errMessage)))
+						Expect(err).To(MatchError(fmt.Sprintf(`CreateHttpRequest for download URL "https://some/remote/file" failed: %s`, errMessage)))
 					})
 				})
 
@@ -190,7 +190,7 @@ var _ = Describe("Download", func() {
 					})
 
 					It("should propagate the error", func() {
-						Expect(err).To(MatchError(fmt.Sprintf(`Download from URL "http://some/remote/file" failed: %s`, errMessage)))
+						Expect(err).To(MatchError(fmt.Sprintf(`Download from URL "https://some/remote/file" failed: %s`, errMessage)))
 					})
 				})
 
@@ -435,7 +435,7 @@ var _ = Describe("HttpResponse", func() {
 
 var _ = Describe("CreateHttpRequest", func() {
 	It("should return a suitable error when the method is unknown", func() {
-		_, err := download.NewHttpHelper().CreateHttpRequest("bad method", "http://example.com")
+		_, err := download.NewHttpHelper().CreateHttpRequest("bad method", "https://example.com")
 		Expect(err).To(MatchError(`net/http: invalid method "bad method"`))
 	})
 })

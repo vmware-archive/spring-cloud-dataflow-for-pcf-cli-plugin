@@ -13,8 +13,8 @@ import (
 
 var _ = Describe("EtagIndex", func() {
 	const (
-		url1  = "http://url.1"
-		url2  = "http://url.2"
+		url1  = "https://url.1"
+		url2  = "https://url.2"
 		etag1 = "etag1"
 		etag2 = "etag2"
 	)
