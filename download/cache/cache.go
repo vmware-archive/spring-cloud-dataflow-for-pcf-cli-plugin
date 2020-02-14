@@ -185,6 +185,9 @@ func writeDataToNamedFile(data io.ReadCloser, filePath string) error {
 
 func fileExists(filePath string) bool {
 	fi, err := os.Stat(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		return false
+	}
 	if os.IsNotExist(err) || fi.IsDir() {
 		return false
 	}
@@ -196,7 +199,7 @@ func createDownloadsDirectory(dirPath string) error {
 }
 
 func createFilePathForDownloadFile(url string, destinationDirectory string) string {
-	tokens := strings.Split(url, string(os.PathSeparator))
+	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
 	filePath := path.Join(destinationDirectory, fileName)
 	return filePath
