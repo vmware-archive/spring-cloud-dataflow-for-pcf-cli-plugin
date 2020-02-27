@@ -56,6 +56,7 @@ func (c *Plugin) Run(cliConnection plugin.CliConnection, args []string) {
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSslValidation},
+		Proxy:           http.ProxyFromEnvironment,
 	}
 	client := &http.Client{
 		Transport: tr,

@@ -109,7 +109,9 @@ type httpHelper struct {
 }
 
 func (h *httpHelper) CreateHttpRequest(method string, url string) (HttpRequest, error) {
+	tr := &http.Transport{Proxy: http.ProxyFromEnvironment}
 	cl := &http.Client{
+		Transport:     tr,
 		CheckRedirect: nil,
 	}
 
