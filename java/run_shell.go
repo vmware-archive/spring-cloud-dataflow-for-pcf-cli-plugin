@@ -24,7 +24,7 @@ import (
 )
 
 func RunShell(cmd *exec.Cmd) error {
-	cmd.Env = envVars("PATH", "HOME", "CF_HOME")
+	cmd.Env = envVars("PATH", "HOME", "CF_HOME", "HOMEDRIVE", "HOMEPATH", "TMP", "TEMP")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
