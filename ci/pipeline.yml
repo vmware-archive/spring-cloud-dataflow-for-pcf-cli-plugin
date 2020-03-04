@@ -26,7 +26,7 @@ jobs:
       params:
         bump: patch
   - task: build-plugin
-    file: cf-cli-plugin/ci/tasks/build.yml
+    file: scdf-for-pcf-cli-plugin/ci/tasks/build.yml
     on_success:
       in_parallel:
       - put: scdf-for-pcf-cli-plugin-storage
