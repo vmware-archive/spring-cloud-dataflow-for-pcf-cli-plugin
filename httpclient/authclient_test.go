@@ -212,7 +212,6 @@ var _ = Describe("Authclient", func() {
 		)
 
 		var (
-			respBody io.ReadCloser
 			bodyType string
 			body     string
 		)
@@ -227,7 +226,7 @@ var _ = Describe("Authclient", func() {
 
 		JustBeforeEach(func() {
 			authClient := httpclient.NewAuthenticatedClient(fakeClient)
-			respBody, status, err = authClient.DoAuthenticatedPost(URL, bodyType, body, testAccessToken)
+			_, status, err = authClient.DoAuthenticatedPost(URL, bodyType, body, testAccessToken)
 		})
 
 		Context("when the URL is invalid", func() {

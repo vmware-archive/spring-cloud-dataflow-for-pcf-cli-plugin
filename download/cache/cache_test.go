@@ -79,7 +79,6 @@ var _ = Describe("Cache", func() {
 		downloadsCache cache.Cache
 		cacheEntry     cache.CacheEntry
 		err            error
-		testError      error
 		url            string
 	)
 
@@ -130,7 +129,6 @@ var _ = Describe("Cache", func() {
 
 	Describe("Entry", func() {
 		BeforeEach(func() {
-			testError = errors.New(errMessage)
 			url = urlValue
 
 			downloadsCache, err = cache.NewCache(GinkgoWriter)
