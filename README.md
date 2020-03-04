@@ -8,11 +8,11 @@ For information on plugin development, see
 
 ## Building
 
-To build the plugin, install go and govendor (see the [Go Development](docs/go.adoc) guide for instructions) and issue:
+To build the plugin, run:
 ```bash
 $ rm $GOPATH/bin/spring-cloud-dataflow-for-pcf-cli-plugin
-$ cd $GOPATH/src/github.com/pivotal-cf/spring-cloud-dataflow-for-pcf-cli-plugin
-$ govendor install -ldflags="-X main.pluginVersion=$(cat version)" +local
+$ cd spring-cloud-dataflow-for-pcf-cli-plugin
+$ go install -ldflags="-X main.pluginVersion=$(cat version)"
 ```
 This builds the plugin with the current version number in the [version file](version).
 
@@ -27,18 +27,15 @@ Plugin version: 0.0.8
 
 ## Installing
 
-### From CF Community
-
-To install the plugin from the Cloud Foundry Community Plugins, run the following command:
-
-`cf install-plugin -r CF-Community "spring-cloud-dataflow-for-pcf"`
-
-### From Manual Build
-
 To install the plugin in the `cf` CLI, first build it and then issue:
 ```bash
 $ cf install-plugin -f $GOPATH/bin/spring-cloud-dataflow-for-pcf-cli-plugin
 
+```
+
+You can also install the plugin from the [Cloud Foundry cf-cli plugins repository](https://plugins.cloudfoundry.org):
+```bash
+$ cf install-plugin -r CF-Community "spring-cloud-dataflow-for-pcf"
 ```
 
 The plugin's commands may then be listed by issuing `cf help`.
@@ -61,23 +58,20 @@ This needs to be done whenever commands are added, modified, or deleted. Note th
 
 The generated docs may be viewed [here](docs/cli.md).
 
-## Go Development
-
-See the [Go Development](docs/go.adoc) guide.
-(If you just want to build and install the plugin, simply install go and govendor.)
-
 ## Testing
+
+First [install Ginkgo](https://onsi.github.io/ginkgo/).
 
 Run the tests as follows:
 ```bash
-$ cd $GOPATH/src/github.com/pivotal-cf/spring-cloud-dataflow-for-cli-plugin
-$ govendor test +local
+$ cd spring-cloud-dataflow-for-cli-plugin
+$ ginkgo -r
 ```
 
 ## License
 
 The Spring Cloud Dataflow for PCF CLI plugin is Open Source software released under the
-[Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+[Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0.html).
 
 ## Contributing
 

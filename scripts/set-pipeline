@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+set_pipeline() {
+  fly -t scs set-pipeline -p scdf-for-pcf-cli-plugin -c pipeline.yml -l config.yml
+}
+
+main() {
+  fly -t scs sync
+
+  pushd "$(dirname "$0")/../ci" > /dev/null
+
+  set_pipeline
+
+  popd > /dev/null
+}
+
+main

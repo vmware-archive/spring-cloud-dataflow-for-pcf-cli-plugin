@@ -1,0 +1,3 @@
+scdf-cf-cli-s3-bucket-name: spring-cloud-dataflow-for-pcf-cli-plugin
+scs-slack-failure-channel: "#spring-cloud-services"
+scs-slack-notification-channel: "#scs-firehose"
